@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "fem-ecs",
+    "sparse",
+    "solvers",
+    "fem-core",
+    "gui"
+]
+
+resolver = "3"

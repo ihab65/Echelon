@@ -1,0 +1,13 @@
+# Rust/Cargo
+target/
+**/*.rs.bk
+**/*.log
+Cargo.lock
+
+# Bevy
+*.rpt2
+
+# Editor
+.idea/
+.vscode/
+*.swp
