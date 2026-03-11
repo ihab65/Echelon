@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+bevy = "0.16.1"
+bevy_egui = "0.36.0"
+gui = { path = "../gui" }

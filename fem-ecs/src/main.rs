@@ -1,3 +1,9 @@
+use bevy::prelude::*;
+use gui::GuiPlugin;
+
 fn main() {
-    println!("Hello, world!");
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_plugins(GuiPlugin)
+        .run();
 }

@@ -3,7 +3,7 @@ members = [
     "fem-ecs",
     "sparse",
     "solvers",
-    "fem-core",
+    "fem_core",
     "gui"
 ]
 
