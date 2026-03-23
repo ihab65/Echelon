@@ -1,14 +1,31 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! # solvers
+//!
+//! Sparse direct solvers for symmetric positive definite systems `Ku = f`.
+//!
+//! ## Planned contents
+//!
+//! ```text
+//! src/
+//!   lib.rs            — this file
+//!   error.rs          — SolverError (wraps SparseError)
+//!   ordering/
+//!     mod.rs
+//!     rcm.rs          — Reverse Cuthill-McKee fill reduction
+//!     amd.rs          — Approximate Minimum Degree (later)
+//!   cholesky/
+//!     mod.rs          — public SparseSolver interface
+//!     symbolic.rs     — elimination tree, L sparsity pattern
+//!     numeric.rs      — numeric Cholesky factorization
+//!     solve.rs        — forward/backward substitution
+//! ```
+//!
+//! ## Dependency direction
+//!
+//! `solvers` depends on `sparse`.  `sparse` has no knowledge of `solvers`.
+//! This is enforced by keeping them as separate crates in the workspace.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod error;
+pub mod ordering;
+pub mod cholesky;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use error::{SolverError, Result};
