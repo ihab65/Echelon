@@ -1,48 +1,94 @@
-pub mod matrix;
-pub mod ops;
-pub mod iter;
-pub mod utils;
-pub mod errors;
+//! # sparse
+//!
+//! Compressed sparse matrix storage formats and operations for FEM assembly.
+//!
+//! ## Formats
+//!
+//! | Type             | Storage        | Primary use                     |
+//! |------------------|----------------|---------------------------------|
+//! | [`CsrMatrix`]    | Full, row-major| General assembly and matvec     |
+//! | [`SymCsrMatrix`] | Upper triangle | Symmetric K, Cholesky input     |
+//! | [`CscMatrix`]    | Full, col-major| Cholesky factorization (solver) |
+//!
+//! ## Typical workflow
+//!
+//! ```text
+//! CooBuilder  →  CsrMatrix  →  SymCsrMatrix  →  CscMatrix
+//!   (input)      (assembly)    (half storage)   (solver)
+//! ```
+//!
+//! ## Crate layout
+//!
+//! ```text
+//! src/
+//!   lib.rs         — this file: SparseMatrix trait + re-exports
+//!   error.rs       — SparseError, Result
+//!   convert.rs     — conversions between formats
+//!   coo.rs         — CooBuilder (triplet entry point)
+//!   csr/           — CsrMatrix
+//!   sym/           — SymCsrMatrix
+//!   csc/           — CscMatrix
+//! ```
 
-pub use matrix::CsrMatrix;
-pub use errors::{CsrError, Result};
+pub mod error;
+pub mod convert;
+pub mod coo;
+pub mod csr;
+pub mod sym;
+pub mod csc;
 
-#[cfg(test)]
-mod tests {
-    use super::CsrMatrix;
+pub use error::{SparseError, Result};
+pub use coo::CooBuilder;
+pub use csr::CsrMatrix;
+pub use sym::SymCsrMatrix;
+pub use csc::CscMatrix;
+pub use csr::ops::MatvecWorkspace;
 
-    #[test]
-    fn test_csr_from_pattern() {
-        // Define a 3x3 sparsity pattern
-        // Row 0: columns 0,2
-        // Row 1: columns 0,1,2
-        // Row 2: columns 1,2
-        let pattern = vec![
-            vec![0, 2],
-            vec![0, 1, 2],
-            vec![1, 2],
-        ];
+// -----------------------------------------------------------------
+// SparseMatrix trait
+//
+// Implemented by all three storage types.  The solver crate accepts
+// `&impl SparseMatrix` so it doesn't need to know which format it
+// has been handed.
+// -----------------------------------------------------------------
 
-        let mut csr = CsrMatrix::from_pattern(3, 3, &pattern);
+/// Common interface shared by all sparse matrix types in this crate.
+pub trait SparseMatrix {
+    /// Number of rows.
+    fn nrows(&self) -> usize;
 
-        // Check row_ptr
-        assert_eq!(csr.row_ptr, vec![0, 2, 5, 7]);
+    /// Number of columns.
+    fn ncols(&self) -> usize;
 
-        // Check col_idx
-        assert_eq!(csr.col_idx, vec![0, 2, 0, 1, 2, 1, 2]);
+    /// Number of structurally non-zero entries (including stored zeros).
+    fn nnz(&self) -> usize;
 
-        // Initially, all values are zeros
-        assert_eq!(csr.values, vec![0.0; 7]);
-
-        // Add values
-        csr.add_value(0, 0, 1.5);
-        csr.add_value(1, 2, 2.5);
-        csr.add_value(2, 2, 3.0);
-
-        // Check values
-        assert_eq!(csr.values, vec![1.5, 0.0, 0.0, 0.0, 2.5, 0.0, 3.0]);
-
-        // Number of non-zero entries
-        assert_eq!(csr.nnz(), 7);
+    /// Returns `true` if the matrix is square.
+    fn is_square(&self) -> bool {
+        self.nrows() == self.ncols()
     }
+
+    /// Density: `nnz / (nrows * ncols)`.
+    /// Returns `0.0` for a 0×0 matrix.
+    fn density(&self) -> f64 {
+        let total = self.nrows() * self.ncols();
+        if total == 0 { 0.0 } else { self.nnz() as f64 / total as f64 }
+    }
+
+    /// Verify all internal invariants.
+    /// Returns `Ok(())` on a well-formed matrix.
+    fn validate(&self) -> Result<()>;
+}
+
+// -----------------------------------------------------------------
+// Compile-time Send + Sync assertions (zero runtime cost).
+// If a future change breaks thread-safety the compiler catches it here.
+// -----------------------------------------------------------------
+#[allow(dead_code)]
+fn _assert_send_sync() {
+    fn req<T: Send + Sync>() {}
+    req::<CsrMatrix>();
+    req::<SymCsrMatrix>();
+    req::<CscMatrix>();
+    req::<MatvecWorkspace>();
 }
