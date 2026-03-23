@@ -1,10 +1,7 @@
 [workspace]
 members = [
-    "fem-ecs",
     "sparse",
     "solvers",
-    "fem_core",
-    "gui"
 ]
 
 resolver = "3"
