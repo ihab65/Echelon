@@ -1,6 +1,6 @@
 //! Integration tests for format conversions.
 
-use sparse::{CsrMatrix, SymCsrMatrix, CooBuilder, SparseMatrix};
+use sparse::{CsrMatrix, SymCsrMatrix, CooBuilder};
 use sparse::convert::{csr_to_csc, csc_to_csr, sym_to_csc, csr_to_sym};
 
 fn sym_tridiag() -> SymCsrMatrix {

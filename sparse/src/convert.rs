@@ -11,7 +11,7 @@
 //! 1. Count entries per destination row/column → build `ptr` array
 //! 2. Fill entries using the `ptr` as insertion cursors
 
-use crate::{SparseMatrix, CsrMatrix, SymCsrMatrix, CscMatrix};
+use crate::{CsrMatrix, SymCsrMatrix, CscMatrix};
 use crate::error::{SparseError, Result};
 
 // -----------------------------------------------------------------
@@ -228,7 +228,6 @@ pub fn csr_to_sym(csr: &CsrMatrix) -> Result<SymCsrMatrix> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SparseMatrix;
 
     fn sym_tridiag() -> SymCsrMatrix {
         // [ 4 -1  0]

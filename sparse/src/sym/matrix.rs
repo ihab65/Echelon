@@ -34,7 +34,7 @@ pub struct SymCsrMatrix {
 impl SparseMatrix for SymCsrMatrix {
     #[inline] fn nrows(&self)  -> usize { self.n }
     #[inline] fn ncols(&self)  -> usize { self.n }
-    #[inline] fn nnz(&self)    -> usize { self.values.len() }
+    #[inline] fn nnz(&self)    -> usize { self.nnz() }
     fn validate(&self)         -> Result<()> { self.validate() }
 }
 
@@ -172,6 +172,19 @@ impl SymCsrMatrix {
     pub fn nnz(&self) -> usize {
         self.values.len()
     }
+
+    /// Raw row pointer array: `row_ptr[i]..row_ptr[i+1]` is the storage
+    /// range for row `i`.
+    #[inline]
+    pub fn row_ptr(&self) -> &[usize] { &self.row_ptr }
+
+    /// Raw column index array.
+    #[inline]
+    pub fn col_idx(&self) -> &[usize] { &self.col_idx }
+
+    /// Raw values array.
+    #[inline]
+    pub fn values(&self) -> &[f64] { &self.values }
 
     /// Value at `(row, col)` in the full symmetric matrix.
     ///

@@ -32,7 +32,7 @@ pub struct CscMatrix {
 impl SparseMatrix for CscMatrix {
     #[inline] fn nrows(&self)  -> usize { self.nrows }
     #[inline] fn ncols(&self)  -> usize { self.ncols }
-    #[inline] fn nnz(&self)    -> usize { self.values.len() }
+    #[inline] fn nnz(&self)    -> usize { self.nnz() }
     fn validate(&self)         -> Result<()> { self.validate() }
 }
 
@@ -122,6 +122,19 @@ impl CscMatrix {
     pub fn nnz(&self) -> usize {
         self.values.len()
     }
+
+    /// Raw column pointer array: `col_ptr[j]..col_ptr[j+1]` is the storage
+    /// range for column `j`.
+    #[inline]
+    pub fn col_ptr(&self) -> &[usize] { &self.col_ptr }
+
+    /// Raw row index array (sorted within each column).
+    #[inline]
+    pub fn row_idx(&self) -> &[usize] { &self.row_idx }
+
+    /// Raw values array.
+    #[inline]
+    pub fn values(&self) -> &[f64] { &self.values }
 
     /// Value at `(row, col)`.
     ///

@@ -31,7 +31,7 @@ pub struct CsrMatrix {
 impl SparseMatrix for CsrMatrix {
     #[inline] fn nrows(&self)    -> usize { self.nrows }
     #[inline] fn ncols(&self)    -> usize { self.ncols }
-    #[inline] fn nnz(&self)      -> usize { self.values.len() }
+    #[inline] fn nnz(&self)      -> usize { self.nnz() }
     fn validate(&self)           -> Result<()> { self.validate() }
 }
 
@@ -152,6 +152,25 @@ impl CsrMatrix {
 // -----------------------------------------------------------------
 
 impl CsrMatrix {
+    /// Number of structurally non-zero entries.
+    #[inline]
+    pub fn nnz(&self) -> usize {
+        self.values.len()
+    }
+    
+    /// Raw row pointer array: `row_ptr[i]..row_ptr[i+1]` is the storage
+    /// range for row `i`.
+    #[inline]
+    pub fn row_ptr(&self) -> &[usize] { &self.row_ptr }
+
+    /// Raw column index array.
+    #[inline]
+    pub fn col_idx(&self) -> &[usize] { &self.col_idx }
+
+    /// Raw values array.
+    #[inline]
+    pub fn values(&self) -> &[f64] { &self.values }
+    
     /// Value at `(row, col)`.
     ///
     /// Returns `0.0` for structural zeros (entries absent from the pattern)

@@ -1,4 +1,3 @@
-use crate::SparseMatrix;
 use crate::csr::CsrMatrix;
 
 impl CsrMatrix {
