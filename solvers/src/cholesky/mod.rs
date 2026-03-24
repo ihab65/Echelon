@@ -12,11 +12,12 @@ use sparse::convert::sym_to_csc;
 /// # Three-phase design
 ///
 /// 1. **`analyze(&K)`** — symbolic phase.
-///    Computes the RCM fill-reduction permutation, applies it to `K`, then
-///    determines the sparsity pattern of the Cholesky factor `L`.  Run
-///    **once per topology** (every time the non-zero structure of `K` changes,
-///    e.g. when elements are added or removed).  Reuse across all Newton
-///    iterations and load steps as long as the topology is unchanged.
+///    Computes the fill-reduction ordering (either RCM or a user‑supplied
+///    permutation), applies it to `K`, then determines the sparsity pattern
+///    of the Cholesky factor `L`.  Run **once per topology** (every time the
+///    non-zero structure of `K` changes, e.g. when elements are added or
+///    removed).  Reuse across all Newton iterations and load steps as long
+///    as the topology is unchanged.
 ///
 /// 2. **`factorize(&K)`** — numeric phase.
 ///    Computes the numerical values of `L` from `K` and the symbolic pattern.
@@ -28,14 +29,12 @@ use sparse::convert::sym_to_csc;
 ///    Computes `u = K⁻¹ f` via forward/backward substitution with the
 ///    permutation.  Run **once per right-hand side**.  Requires `factorize`.
 ///
-/// # Example
-/// ```ignore
-/// let mut solver = SparseSolver::new();
-/// solver.analyze(&K)?;
-/// solver.factorize(&K)?;
-/// solver.solve(&f, &mut u)?;
-/// ```
+/// # Custom ordering
+/// By default, the solver uses the Reverse Cuthill–McKee (RCM) ordering.
+/// To supply a custom permutation, call [`set_ordering`] before `analyze`.
 pub struct SparseSolver {
+    /// User‑provided permutation (if any).  If `None`, RCM will be computed.
+    user_perm: Option<Permutation>,
     /// RCM permutation — stored so `factorize` can re-permute K and `solve`
     /// can unpermute the solution without re-running the ordering.
     perm:     Option<Permutation>,
@@ -46,14 +45,35 @@ pub struct SparseSolver {
 impl SparseSolver {
     /// Create a new solver.  No allocations occur until `analyze` is called.
     pub fn new() -> Self {
-        Self { perm: None, symbolic: None, numeric: None }
+        Self {
+            user_perm: None,
+            perm: None,
+            symbolic: None,
+            numeric: None,
+        }
     }
 
-    /// Symbolic phase: compute the RCM ordering and the fill pattern of `L`.
+    /// Set a custom permutation to be used in the next call to `analyze`.
+    ///
+    /// The permutation must be a bijection from the reordered index space
+    /// to the original index space (i.e., `perm[new] = old`).  It must be
+    /// compatible with the matrix that will be passed to `analyze`.
+    ///
+    /// Calling this method invalidates any previously computed factorization.
+    pub fn set_ordering(&mut self, perm: Permutation) {
+        self.user_perm = Some(perm);
+        // Invalidate any existing analysis/factorization.
+        self.perm = None;
+        self.symbolic = None;
+        self.numeric = None;
+    }
+
+    /// Symbolic phase: compute the fill‑reduction ordering and the pattern of `L`.
     ///
     /// Internally this:
     /// 1. Builds the adjacency graph of `K`.
-    /// 2. Computes the RCM permutation `P`.
+    /// 2. Uses either the user‑supplied permutation (from `set_ordering`) or
+    ///    computes the RCM ordering.
     /// 3. Applies `P` to produce `K_perm = P K Pᵀ`.
     /// 4. Runs symbolic Cholesky on `K_perm` to get the pattern of `L`.
     ///
@@ -65,9 +85,13 @@ impl SparseSolver {
     /// # Errors
     /// - Propagates any [`SolverError`] from the symbolic phase.
     pub fn analyze(&mut self, k: &SymCsrMatrix) -> Result<()> {
-        // 1. RCM ordering
-        let g    = Graph::from_sym(k);
-        let perm = rcm(&g);
+        // 1. Determine the ordering: user‑supplied or RCM
+        let perm = if let Some(p) = self.user_perm.take() {
+            p
+        } else {
+            let g = Graph::from_sym(k);
+            rcm(&g)
+        };
 
         // 2. Permute K and convert to CSC (pattern-only; values unused here)
         let k_perm = perm.permute_sym(k)?;
@@ -75,9 +99,9 @@ impl SparseSolver {
         // 3. Symbolic Cholesky on the permuted matrix
         let sym = symbolic::analyze(&k_perm)?;
 
-        self.perm     = Some(perm);
+        self.perm = Some(perm);
         self.symbolic = Some(sym);
-        self.numeric  = None; // invalidate any previous factorization
+        self.numeric = None; // invalidate any previous factorization
         Ok(())
     }
 
@@ -92,10 +116,10 @@ impl SparseSolver {
     /// - [`SolverError::NotPositiveDefinite`] if `K` is not SPD.
     pub fn factorize(&mut self, k: &SymCsrMatrix) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotAnalyzed)?;
-        let sym  = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
+        let sym = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
 
         let k_perm = perm.permute_sym(k)?;
-        let k_csc  = sym_to_csc(&k_perm);
+        let k_csc = sym_to_csc(&k_perm);
 
         self.numeric = Some(numeric::factorize(&k_csc, sym)?);
         Ok(())
@@ -112,8 +136,8 @@ impl SparseSolver {
     /// - [`SolverError::RhsSizeMismatch`] if `f.len() != K.n` or `u.len() != K.n`.
     pub fn solve(&self, f: &[f64], u: &mut [f64]) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotFactorized)?;
-        let sym  = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;
-        let num  = self.numeric.as_ref().ok_or(SolverError::NotFactorized)?;
+        let sym = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;
+        let num = self.numeric.as_ref().ok_or(SolverError::NotFactorized)?;
         solve::solve(sym, num, perm, f, u)
     }
 
