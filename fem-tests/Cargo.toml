@@ -1,0 +1,13 @@
+[package]
+name    = "fem-tests"
+version = "0.1.0"
+edition = "2024"
+
+# This crate has no library — it exists purely to hold integration tests
+# that exercise the full sparse → solvers → fem_core pipeline against
+# known analytical FEM solutions.
+
+[dev-dependencies]
+sparse   = { path = "../sparse" }
+solvers  = { path = "../solvers" }
+fem_core = { path = "../fem-core" }
