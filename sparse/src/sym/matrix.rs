@@ -270,12 +270,7 @@ impl SymCsrMatrix {
                 } else {
                     (dof_map[j], dof_map[i], ke[j * n + i])
                 };
-                // accumulate both i→j and j→i (they're equal by symmetry)
-                // but for i==j only once
                 self.add_value(gr, gc, val)?;
-                if i != j {
-                    self.add_value(gr, gc, val)?;
-                }
             }
         }
         Ok(())
