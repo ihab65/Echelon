@@ -276,8 +276,8 @@ fn test_1d_bar_two_segments() {
     let mut f = vec![0.0_f64; n_dof];
     f[2] = p;   // x-DOF of node 1
 
-    // BCs: pin all DOFs of nodes 0 and 2 (A and B)
-    for dof in [0, 1, 4, 5] { apply_pin(&mut k, &mut f, dof); }
+    // BCs: pin all DOFs of nodes 0 and 2, plus transverse DOF at node 1
+    for dof in [0, 1, 3, 4, 5] { apply_pin(&mut k, &mut f, dof); }
 
     let u = solve(&k, &f);
 
