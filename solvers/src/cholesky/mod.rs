@@ -47,9 +47,9 @@ impl SparseSolver {
     pub fn new() -> Self {
         Self {
             user_perm: None,
-            perm: None,
-            symbolic: None,
-            numeric: None,
+            perm:      None,
+            symbolic:  None,
+            numeric:   None,
         }
     }
 

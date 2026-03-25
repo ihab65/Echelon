@@ -1,0 +1,11 @@
+[package]
+name = "fem_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# No external dependencies — this crate is pure type definitions
+# and small fixed-size computations.
+
+[dev-dependencies]
+# none
