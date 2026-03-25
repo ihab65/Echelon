@@ -280,8 +280,8 @@ Echelon/
 - [x] Format conversions
 - [x] RCM fill-reduction ordering
 - [x] Symbolic Cholesky (elimination tree + L pattern)
-- [ ] Numeric Cholesky (left-looking, dense column workspace)
-- [ ] Triangular solve (with permutation)
+- [x] Numeric Cholesky (left-looking, dense column workspace)
+- [x] Triangular solve (with permutation)
 - [ ] `core` crate (index newtypes, transforms)
 - [ ] `materials`: `ElasticUniaxial`
 - [ ] `elements`: `Truss2d`, `ElasticBeam2d`

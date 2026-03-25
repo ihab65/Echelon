@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "sparse",
-    "solvers",
+    "solvers", 
+    "fem-core",
 ]
 
 resolver = "3"
