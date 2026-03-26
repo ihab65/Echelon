@@ -1,8 +1,18 @@
 [package]
-name = "solvers"
+name    = "solvers"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 sparse    = { path = "../sparse" }
 thiserror = "2.0.16"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+faer      = "0.16"
+
+# ── Benchmarks ────────────────────────────────────────────────────────────────
+
+[[bench]]
+name    = "cholesky_bench"
+harness = false
