@@ -46,7 +46,19 @@ pub enum SparseError {
          (expected {n}² = {expected} entries)"
     )]
     ScatterSizeMismatch { ke_len: usize, n: usize, expected: usize },
+
+    // ---- I/O ------------------------------------------------------------
+    /// Errors arising from Matrix Market parsing or file system operations.
+    #[error("I/O error: {0}")]
+    IoError(String),
 }
 
 /// Convenience alias used throughout the `sparse` crate.
 pub type Result<T> = std::result::Result<T, SparseError>;
+
+// Manual implementation for std::io::Error to allow '?' operator in to_mtx
+impl From<std::io::Error> for SparseError {
+    fn from(err: std::io::Error) -> Self {
+        SparseError::IoError(err.to_string())
+    }
+}

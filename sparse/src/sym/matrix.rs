@@ -421,6 +421,41 @@ impl fmt::Display for SymCsrMatrix {
 }
 
 // -----------------------------------------------------------------
+// IO (Matrix Market)
+// -----------------------------------------------------------------
+
+#[cfg(feature = "io")]
+impl SymCsrMatrix {
+    /// Exports the symmetric matrix to a Matrix Market (.mtx) file.
+    /// Only the stored upper triangle is written, with the 'symmetric' header.
+    pub fn to_mtx<P: AsRef<std::path::Path>>(&self, path: P) -> crate::error::Result<()> {
+        use std::fs::File;
+        use std::io::{BufWriter, Write};
+
+        let file = File::create(path)?;
+        let mut writer = BufWriter::new(file);
+
+        // Header: Note the 'symmetric' tag
+        writeln!(writer, "%%MatrixMarket matrix coordinate real symmetric")?;
+        
+        // Shape: n n nnz (where nnz is just the stored triangle)
+        writeln!(writer, "{} {} {}", self.n, self.n, self.nnz())?;
+
+        // Data: 1-based indexing
+        for i in 0..self.n {
+            for k in self.row_ptr[i]..self.row_ptr[i+1] {
+                let j = self.col_idx[k];
+                let val = self.values[k];
+                // In SymCsrMatrix, j >= i is guaranteed by invariants
+                writeln!(writer, "{} {} {:.16}", i + 1, j + 1, val)?;
+            }
+        }
+        writer.flush()?;
+        Ok(())
+    }
+}
+
+// -----------------------------------------------------------------
 // Unit tests
 // -----------------------------------------------------------------
 
