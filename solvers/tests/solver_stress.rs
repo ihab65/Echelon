@@ -49,7 +49,7 @@ fn spring_chain(n: usize, k_spring: f64) -> SymCsrMatrix {
         let diag = if i == 0 || i == n - 1 { k_spring } else { 2.0 * k_spring };
         coo.add(i, i, diag);
     }
-    for i in 0..(n - 1) {
+    for i in 0..(n - 2) {
         coo.add(i, i + 1, -k_spring);
     }
     coo.build_sym().unwrap()
