@@ -49,3 +49,21 @@ fn test_from_mtx_symmetric_normalization() {
     assert_eq!(sym.get(1, 0).unwrap(), 0.5); // Check mirrored access
     assert_eq!(sym.get(1, 1).unwrap(), 2.0);
 }
+
+#[cfg(feature = "io")]
+#[test]
+fn test_sym_round_trip() {
+    let mut coo = CooBuilder::new(2, 2);
+    coo.add(0, 0, 4.0);
+    coo.add(0, 1, 1.0);
+    coo.add(1, 1, 4.0);
+    let sym = coo.build_sym().unwrap();
+
+    let temp = NamedTempFile::new().unwrap();
+    sym.to_mtx(temp.path()).unwrap();
+
+    let loader = CooBuilder::from_mtx(temp.path()).unwrap();
+    let sym_back = loader.build_sym().unwrap();
+
+    assert_eq!(sym.get(0, 1).unwrap(), sym_back.get(0, 1).unwrap());
+}
