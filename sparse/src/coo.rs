@@ -148,6 +148,48 @@ impl CooBuilder {
     }
 }
 
+// Optional MTX loading support, gated behind the "io" feature. This is a convenient
+// way to get real-world sparse matrices into the library for testing and benchmarking.
+#[cfg(feature = "io")]
+impl CooBuilder {
+    pub fn from_mtx<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        // matrix_market_rs returns MtxData<T, NDIM>. We use f64 and default 2 dims.
+        let mtx = matrix_market_rs::MtxData::<f64>::from_file(path)
+            .map_err(|e| SparseError::IoError(format!("MTX parse error: {:?}", e)))?;
+
+        match mtx {
+            matrix_market_rs::MtxData::Sparse(shape, indices, values, sym_info) => {
+                let mut builder = Self::new(shape[0], shape[1]);
+
+                for (idx, &val) in indices.iter().zip(values.iter()) {
+                    // Note: matrix-market-rs source shows it already does:
+                    // dims[i] = num - 1; 
+                    // So these are already 0-indexed.
+                    let mut r = idx[0];
+                    let mut c = idx[1];
+
+                    match sym_info {
+                        matrix_market_rs::SymInfo::General => {
+                            builder.add(r, c, val);
+                        }
+                        matrix_market_rs::SymInfo::Symmetric => {
+                            // Ensure upper triangle (r <= c) for build_sym compatibility
+                            if r > c {
+                                std::mem::swap(&mut r, &mut c);
+                            }
+                            builder.add(r, c, val);
+                        }
+                    }
+                }
+                Ok(builder)
+            }
+            matrix_market_rs::MtxData::Dense(_, _, _) => {
+                Err(SparseError::IoError("Dense MTX not supported".into()))
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
