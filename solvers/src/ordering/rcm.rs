@@ -597,7 +597,7 @@ mod tests {
         let g    = Graph::from_sym(&m);
         let perm = rcm(&g);
         let mut solver2 = SparseSolver::new();
-        solver2.set_ordering(perm);
+        solver2.set_ordering(crate::ordering::Ordering::Custom(perm));
         solver2.analyze_and_factorize(&m).unwrap();
         let mut u2 = vec![0.0_f64; n];
         solver2.solve(&f, &mut u2).unwrap();
@@ -624,7 +624,7 @@ mod tests {
 
         let perm = rcm(&g);
         let mut solver2 = SparseSolver::new();
-        solver2.set_ordering(perm);
+        solver2.set_ordering(crate::ordering::Ordering::Custom(perm));
         solver2.analyze_and_factorize(&m).unwrap();
         let mut u2 = vec![0.0_f64; n];
         solver2.solve(&f, &mut u2).unwrap();

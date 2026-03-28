@@ -336,7 +336,7 @@ fn b6_laplacian_rcm_validity_and_correctness() {
         use solvers::cholesky::SparseSolver;
         
         let mut solver = SparseSolver::new();
-        solver.set_ordering(perm.clone());
+        solver.set_ordering(solvers::ordering::Ordering::Custom(perm.clone()));
         solver.analyze_and_factorize(&k).unwrap();
         let mut u = vec![0.0_f64; n];
         solver.solve(&f, &mut u).unwrap();
