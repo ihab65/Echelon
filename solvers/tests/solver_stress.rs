@@ -297,6 +297,7 @@ fn b5_laplacian_solution_magnitude_bound() {
 fn b6_laplacian_rcm_validity_and_correctness() {
     use solvers::cholesky::symbolic::analyze;
     use solvers::ordering::{Graph, rcm};
+    use sparse::convert::sym_to_csc;
 
     let nx = 20;
     let ny = 20;
@@ -360,8 +361,8 @@ fn b6_laplacian_rcm_validity_and_correctness() {
     // We assert only that RCM does not increase fill by more than 3× — a loose
     // bound that would catch a completely broken permutation while not asserting
     // the impossible guarantee that RCM always improves fill.
-    let nnz_natural = analyze(&k).unwrap().nnz_l();
-    let nnz_rcm     = analyze(&k_perm).unwrap().nnz_l();
+    let nnz_natural = analyze(&sym_to_csc(&k)).unwrap().nnz_l();
+    let nnz_rcm     = analyze(&sym_to_csc(&k_perm)).unwrap().nnz_l();
     assert!(
         nnz_rcm <= nnz_natural * 3,
         "b6: RCM fill {nnz_rcm} is more than 3× natural fill {nnz_natural} — \

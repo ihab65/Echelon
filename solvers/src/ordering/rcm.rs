@@ -290,7 +290,8 @@ mod tests {
 
     fn nnz_l(m: &SymCsrMatrix) -> usize {
         use crate::cholesky::symbolic::analyze;
-        analyze(m).unwrap().nnz_l()
+        use sparse::convert::sym_to_csc;
+        analyze(&sym_to_csc(m)).unwrap().nnz_l()
     }
 
     // ================================================================

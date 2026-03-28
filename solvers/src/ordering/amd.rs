@@ -191,7 +191,8 @@ mod tests {
     // ---- fill helper ----
 
     fn nnz_l(m: &SymCsrMatrix) -> usize {
-        analyze(m).unwrap().nnz_l()
+        use sparse::convert::sym_to_csc;
+        analyze(&sym_to_csc(m)).unwrap().nnz_l()
     }
 
     // ================================================================

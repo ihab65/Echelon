@@ -5,6 +5,7 @@
 
 use solvers::cholesky::symbolic::analyze;
 use sparse::{CooBuilder, SymCsrMatrix};
+use sparse::convert::sym_to_csc;
 
 fn tridiag(n: usize) -> SymCsrMatrix {
     let mut coo = CooBuilder::new(n, n);
@@ -20,7 +21,7 @@ fn symbolic_tridiag_nnz_l_equals_2n_minus_1() {
     // For an n×n tridiagonal: L is bidiagonal → nnz(L) = 2n - 1
     for n in [3, 5, 10, 20] {
         let k   = tridiag(n);
-        let sym = analyze(&k).unwrap();
+        let sym = analyze(&sym_to_csc(&k)).unwrap();
         assert_eq!(
             sym.nnz_l(), 2 * n - 1,
             "n={n}: expected nnz(L)={}, got {}", 2 * n - 1, sym.nnz_l()
@@ -30,7 +31,7 @@ fn symbolic_tridiag_nnz_l_equals_2n_minus_1() {
 
 #[test]
 fn symbolic_col_ptr_monotone_nondecreasing() {
-    let sym = analyze(&tridiag(10)).unwrap();
+    let sym = analyze(&sym_to_csc(&tridiag(10))).unwrap();
     for w in sym.col_ptr.windows(2) {
         assert!(w[0] <= w[1], "col_ptr not non-decreasing: {:?}", &sym.col_ptr);
     }
@@ -38,7 +39,7 @@ fn symbolic_col_ptr_monotone_nondecreasing() {
 
 #[test]
 fn symbolic_row_idx_in_lower_triangle() {
-    let sym = analyze(&tridiag(8)).unwrap();
+    let sym = analyze(&sym_to_csc(&tridiag(8))).unwrap();
     for col in 0..sym.n {
         for &row in &sym.row_idx[sym.col_ptr[col]..sym.col_ptr[col + 1]] {
             assert!(row >= col, "upper-triangle entry in L: ({row}, {col})");
@@ -48,7 +49,7 @@ fn symbolic_row_idx_in_lower_triangle() {
 
 #[test]
 fn symbolic_diagonal_entries_present_in_all_columns() {
-    let sym = analyze(&tridiag(6)).unwrap();
+    let sym = analyze(&sym_to_csc(&tridiag(6))).unwrap();
     for col in 0..sym.n {
         let rows = &sym.row_idx[sym.col_ptr[col]..sym.col_ptr[col + 1]];
         assert!(rows.contains(&col), "diagonal missing in col {col}");

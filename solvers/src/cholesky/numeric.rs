@@ -219,7 +219,7 @@ mod tests {
     /// routine in isolation).
     fn factorize_direct(k: &SymCsrMatrix) -> (SymbolicCholesky, NumericCholesky) {
         let csc = sym_to_csc(k);
-        let sym = analyze(k).unwrap();
+        let sym = analyze(&csc).unwrap();
         let num = factorize(&csc, &sym).unwrap();
         (sym, num)
     }
@@ -346,7 +346,7 @@ mod tests {
         coo.add(1, 1,  1.0);
         let k   = coo.build_sym().unwrap();
         let csc = sym_to_csc(&k);
-        let sym = analyze(&k).unwrap();
+        let sym = analyze(&csc).unwrap();
         assert!(matches!(
             factorize(&csc, &sym).unwrap_err(),
             SolverError::NotPositiveDefinite { index: 0, .. }
@@ -361,7 +361,7 @@ mod tests {
         coo.add(1, 1, 1.0);
         let k   = coo.build_sym().unwrap();
         let csc = sym_to_csc(&k);
-        let sym = analyze(&k).unwrap();
+        let sym = analyze(&csc).unwrap();
         assert!(matches!(
             factorize(&csc, &sym).unwrap_err(),
             SolverError::NotPositiveDefinite { .. }

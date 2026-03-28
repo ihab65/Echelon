@@ -156,7 +156,7 @@ mod tests {
     fn solve_direct(k: &SymCsrMatrix, f: &[f64]) -> Vec<f64> {
         let p   = Permutation::identity(k.n);
         let csc = sym_to_csc(k);
-        let sym = analyze(k).unwrap();
+        let sym = analyze(&csc).unwrap();
         let num = factorize(&csc, &sym).unwrap();
         let mut u = vec![0.0; k.n];
         solve(&sym, &num, &p, f, &mut u).unwrap();
@@ -168,7 +168,7 @@ mod tests {
         let perm = rcm(&g);
         let kp   = perm.permute_sym(k).unwrap();
         let csc  = sym_to_csc(&kp);
-        let sym  = analyze(&kp).unwrap();
+        let sym  = analyze(&csc).unwrap();
         let num  = factorize(&csc, &sym).unwrap();
         let mut u = vec![0.0; k.n];
         solve(&sym, &num, &perm, f, &mut u).unwrap();
@@ -321,7 +321,7 @@ mod tests {
     fn rhs_size_mismatch_f() {
         let k   = tridiag(3);
         let csc = sym_to_csc(&k);
-        let sym = analyze(&k).unwrap();
+        let sym = analyze(&csc).unwrap();
         let num = factorize(&csc, &sym).unwrap();
         let p   = Permutation::identity(3);
         let mut u = vec![0.0; 3];
@@ -335,7 +335,7 @@ mod tests {
     fn rhs_size_mismatch_u() {
         let k   = tridiag(3);
         let csc = sym_to_csc(&k);
-        let sym = analyze(&k).unwrap();
+        let sym = analyze(&csc).unwrap();
         let num = factorize(&csc, &sym).unwrap();
         let p   = Permutation::identity(3);
         let mut u = vec![0.0; 5];
