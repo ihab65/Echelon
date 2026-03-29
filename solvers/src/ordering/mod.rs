@@ -8,7 +8,7 @@ pub use permutation::Permutation;
 pub use amd::amd;
 pub use rcm::rcm;
 
-use sparse::SymCsrMatrix;
+use sparse::{SparseScalar, SymCsrMatrix};
 
 // -----------------------------------------------------------------
 // Ordering strategy enum
@@ -80,7 +80,9 @@ impl Ordering {
     ///
     /// Consumes `self` for the `Custom` variant (moves the permutation out
     /// without cloning).  All other variants compute a fresh permutation.
-    pub(crate) fn into_permutation(self, k: &SymCsrMatrix) -> Permutation {
+    pub(crate) fn into_permutation<T>(self, k: &SymCsrMatrix<T>) -> Permutation 
+        where T: SparseScalar
+    {
         match self {
             Ordering::Rcm => {
                 let g = Graph::from_sym(k);

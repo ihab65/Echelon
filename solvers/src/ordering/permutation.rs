@@ -14,7 +14,7 @@
 //! This is what the solver does before factorization when the ordering is
 //! not the identity.
 
-use sparse::SymCsrMatrix;
+use sparse::{SparseScalar, SymCsrMatrix};
 use sparse::error::{SparseError, Result};
 
 /// A reordering permutation: `perm[new_index] = old_index`.
@@ -139,7 +139,7 @@ impl Permutation {
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `perm.len() != k.n`
-    pub fn permute_sym(&self, k: &SymCsrMatrix) -> Result<SymCsrMatrix> {
+    pub fn permute_sym<T>(&self, k: &SymCsrMatrix<T>) -> Result<SymCsrMatrix<T>> where T: SparseScalar {
         let n = k.n;
         if self.perm.len() != n {
             return Err(SparseError::DimensionMismatch {
@@ -159,7 +159,7 @@ impl Permutation {
         // Collect (new_row, new_col, val) triples for all upper entries
         use std::collections::BTreeMap;
         // key: (row, col) in permuted space, value: accumulated value
-        let mut entries: BTreeMap<(usize, usize), f64> = BTreeMap::new();
+        let mut entries: BTreeMap<(usize, usize), T> = BTreeMap::new();
 
         for old_i in 0..n {
             let end   = k.row_ptr()[old_i + 1];
@@ -177,7 +177,7 @@ impl Permutation {
                 } else {
                     (new_j, new_i)
                 };
-                *entries.entry((r, c)).or_insert(0.0) += val;
+                *entries.entry((r, c)).or_insert(T::zero()) += val;
             }
         }
 

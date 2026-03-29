@@ -49,7 +49,7 @@
 
 use std::collections::BTreeSet;
 use super::permutation::Permutation;
-use sparse::SymCsrMatrix;
+use sparse::{SparseScalar, SymCsrMatrix};
 
 // -----------------------------------------------------------------
 // Public entry point
@@ -73,7 +73,7 @@ use sparse::SymCsrMatrix;
 ///
 /// # Panics
 /// Panics if `k.n == 0`.
-pub fn amd(k: &SymCsrMatrix) -> Permutation {
+pub fn amd<T>(k: &SymCsrMatrix<T>) -> Permutation where T: SparseScalar {
     let n = k.n;
     assert!(n > 0, "AMD: matrix must have at least one row");
 
@@ -141,14 +141,14 @@ mod tests {
 
     // ---- matrix builders ----
 
-    fn tridiag(n: usize) -> SymCsrMatrix {
+    fn tridiag(n: usize) -> SymCsrMatrix<f64> {
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n       { coo.add(i, i,      2.0); }
         for i in 0..(n - 1) { coo.add(i, i + 1, -1.0); }
         coo.build_sym().unwrap()
     }
 
-    fn grid_laplacian(k: usize) -> SymCsrMatrix {
+    fn grid_laplacian(k: usize) -> SymCsrMatrix<f64> {
         let n = k * k;
         let mut coo = CooBuilder::new(n, n);
         for r in 0..k {
@@ -163,7 +163,7 @@ mod tests {
     }
 
     /// Star graph: hub node 0 connected to all spokes 1..n.
-    fn star(n: usize) -> SymCsrMatrix {
+    fn star(n: usize) -> SymCsrMatrix<f64> {
         assert!(n >= 2);
         let mut coo = CooBuilder::new(n, n);
         coo.add(0, 0, n as f64);
@@ -190,7 +190,7 @@ mod tests {
 
     // ---- fill helper ----
 
-    fn nnz_l(m: &SymCsrMatrix) -> usize {
+    fn nnz_l(m: &SymCsrMatrix<f64>) -> usize {
         use sparse::convert::sym_to_csc;
         analyze(&sym_to_csc(m)).unwrap().nnz_l()
     }
@@ -397,7 +397,7 @@ mod tests {
     // Correctness: solve after AMD permutation must match natural solve
     // ================================================================
 
-    fn solve_with_perm(k: &SymCsrMatrix, f: &[f64], perm: Permutation) -> Vec<f64> {
+    fn solve_with_perm(k: &SymCsrMatrix<f64>, f: &[f64], perm: Permutation) -> Vec<f64> {
         use crate::cholesky::SparseSolver;
         let mut solver = SparseSolver::new();
         solver.set_ordering(crate::ordering::Ordering::Custom(perm));
@@ -407,7 +407,7 @@ mod tests {
         u
     }
 
-    fn solve_natural(k: &SymCsrMatrix, f: &[f64]) -> Vec<f64> {
+    fn solve_natural(k: &SymCsrMatrix<f64>, f: &[f64]) -> Vec<f64> {
         use crate::cholesky::SparseSolver;
         let mut solver = SparseSolver::new();
         solver.set_ordering(crate::ordering::Ordering::Natural);

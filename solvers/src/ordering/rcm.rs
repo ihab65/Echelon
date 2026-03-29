@@ -204,11 +204,11 @@ mod tests {
     use super::*;
     use super::super::graph::Graph;
     use super::super::permutation::Permutation;
-    use sparse::{SymCsrMatrix, CooBuilder};
+    use sparse::{CooBuilder, SparseScalar, SymCsrMatrix};
 
     // ---- graph / matrix helpers ----
 
-    fn path_graph(n: usize) -> (Graph, SymCsrMatrix) {
+    fn path_graph(n: usize) -> (Graph, SymCsrMatrix<f64>) {
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n       { coo.add(i, i, 2.0); }
         for i in 0..(n - 1) { coo.add(i, i + 1, -1.0); }
@@ -217,7 +217,7 @@ mod tests {
         (g, m)
     }
 
-    fn star_graph_matrix(n: usize) -> (Graph, SymCsrMatrix) {
+    fn star_graph_matrix(n: usize) -> (Graph, SymCsrMatrix<f64>) {
         // Hub = node 0, spokes = nodes 1..n
         let mut coo = CooBuilder::new(n, n);
         coo.add(0, 0, n as f64);
@@ -231,7 +231,7 @@ mod tests {
     }
 
     /// k×k 2-D grid Laplacian, row-major node numbering.
-    fn grid_laplacian(k: usize) -> (Graph, SymCsrMatrix) {
+    fn grid_laplacian(k: usize) -> (Graph, SymCsrMatrix<f64>) {
         let n = k * k;
         let mut coo = CooBuilder::new(n, n);
         for r in 0..k {
@@ -288,7 +288,7 @@ mod tests {
 
     // ---- fill helper ----
 
-    fn nnz_l(m: &SymCsrMatrix) -> usize {
+    fn nnz_l<T>(m: &SymCsrMatrix<T>) -> usize where T: SparseScalar {
         use crate::cholesky::symbolic::analyze;
         use sparse::convert::sym_to_csc;
         analyze(&sym_to_csc(m)).unwrap().nnz_l()

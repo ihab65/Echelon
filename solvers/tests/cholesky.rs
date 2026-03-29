@@ -7,7 +7,7 @@ use solvers::cholesky::symbolic::analyze;
 use sparse::{CooBuilder, SymCsrMatrix};
 use sparse::convert::sym_to_csc;
 
-fn tridiag(n: usize) -> SymCsrMatrix {
+fn tridiag(n: usize) -> SymCsrMatrix<f64> {
     let mut coo = CooBuilder::new(n, n);
     for i in 0..n       { coo.add(i, i,      2.0); }
     for i in 0..(n - 1) { coo.add(i, i + 1, -1.0); }
