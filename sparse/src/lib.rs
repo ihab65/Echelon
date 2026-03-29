@@ -85,7 +85,10 @@ impl SparseScalar for f32 {
 #[cfg(feature = "autodiff")]
 impl SparseScalar for num_dual::Dual64 {
     fn real_part(&self) -> f64 { self.re }
-    fn scalar_sqrt(self) -> Self { num_dual::Dual64::sqrt(self) }
+    fn scalar_sqrt(self) -> Self {
+        use num_dual::DualNum;
+        self.sqrt() 
+    }
 }
 
 /// Common interface shared by all sparse matrix types in this crate.

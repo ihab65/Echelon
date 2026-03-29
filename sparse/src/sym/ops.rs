@@ -81,7 +81,8 @@ impl<T :SparseScalar + Sum + AddAssign> SymCsrMatrix<T> {
                 if col == row {
                     sum_sq += v * v;         // diagonal: once
                 } else {
-                    sum_sq += T::from(2.0).unwrap() * v * v;  // off-diagonal: upper + lower
+                    let two = T::one() + T::one();
+                    sum_sq += two * v * v;  // off-diagonal: upper + lower
                 }
             }
         }

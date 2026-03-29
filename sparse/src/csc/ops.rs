@@ -88,7 +88,7 @@ impl<T: SparseScalar + Sum + AddAssign> CscMatrix<T> {
 
     /// Frobenius norm: `sqrt(Σ aᵢⱼ²)`.
     pub fn frobenius_norm(&self) -> T {
-        self.values.iter().map(|&v| v * v).sum::<T>().sqrt()
+        self.values.iter().map(|&v| v * v).sum::<T>().scalar_sqrt()
     }
 }
 

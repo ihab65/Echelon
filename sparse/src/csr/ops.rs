@@ -137,7 +137,7 @@ impl<T: SparseScalar + Sum + AddAssign> CsrMatrix<T> {
 
     /// Frobenius norm: `sqrt(Σ aᵢⱼ²)` over structurally non-zero entries.
     pub fn frobenius_norm(&self) -> T {
-        self.values.iter().map(|&v| v * v).sum::<T>().sqrt()
+        self.values.iter().map(|&v| v * v).sum::<T>().scalar_sqrt()
     }
 
     /// Return `true` if `|K[i,j] - K[j,i]| ≤ tol` for every stored entry.
@@ -150,7 +150,7 @@ impl<T: SparseScalar + Sum + AddAssign> CsrMatrix<T> {
         }
         for (row, col, val) in self.iter_nonzeros() {
             let mirror = self.find_idx(col, row).map_or(T::zero(), |i| self.values[i]);
-            if (val - mirror).abs() > tol {
+            if (val - mirror).abs().real_part() > tol.real_part() {
                 return Ok(false);
             }
         }
