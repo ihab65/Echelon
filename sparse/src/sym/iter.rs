@@ -1,5 +1,6 @@
 use crate::error::{SparseError, Result};
 use crate::sym::SymCsrMatrix;
+use crate::SparseScalar;
 
 /// Iterator over the **logically** non-zero entries of one row of a
 /// [`SymCsrMatrix`], including the mirrored lower-triangle entries.
@@ -11,18 +12,18 @@ use crate::sym::SymCsrMatrix;
 ///
 /// If you only need the stored (upper-triangle) entries, use
 /// [`SymCsrMatrix::upper_row_iter`] instead.
-pub struct SymRowIter<'a> {
-    mat:     &'a SymCsrMatrix,
+pub struct SymRowIter<'a, T: SparseScalar> {
+    mat:     &'a SymCsrMatrix<T>,
     row:     usize,
     // Phase 1: upper stored entries (col >= row)
     upper_cols: &'a [usize],
-    upper_vals: &'a [f64],
+    upper_vals: &'a [T],
     // Phase 2: lower mirrored entries (col < row), counted down
     lower_col:  usize, // current lower col to check (starts at 0)
 }
 
-impl<'a> Iterator for SymRowIter<'a> {
-    type Item = (usize, f64);
+impl<'a, T:SparseScalar> Iterator for SymRowIter<'a, T> {
+    type Item = (usize, T);
 
     fn next(&mut self) -> Option<Self::Item> {
         // --- Phase 1: drain upper stored entries ---
@@ -49,13 +50,13 @@ impl<'a> Iterator for SymRowIter<'a> {
 
 /// Iterator over only the **stored** (upper-triangle) entries of one row.
 /// Yields `(col, value)` pairs with `col >= row`, in ascending column order.
-pub struct UpperRowIter<'a> {
+pub struct UpperRowIter<'a, T: SparseScalar> {
     cols: &'a [usize],
-    vals: &'a [f64],
+    vals: &'a [T],
 }
 
-impl<'a> Iterator for UpperRowIter<'a> {
-    type Item = (usize, f64);
+impl<'a, T: SparseScalar> Iterator for UpperRowIter<'a, T> {
+    type Item = (usize, T);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -72,9 +73,9 @@ impl<'a> Iterator for UpperRowIter<'a> {
     }
 }
 
-impl ExactSizeIterator for UpperRowIter<'_> {}
+impl<T:SparseScalar> ExactSizeIterator for UpperRowIter<'_, T> {}
 
-impl SymCsrMatrix {
+impl<T:SparseScalar> SymCsrMatrix<T> {
     /// Iterate over all logically non-zero entries in `row` (both triangles).
     ///
     /// Yields `(col, value)` pairs, **not** guaranteed to be in column order
@@ -82,7 +83,7 @@ impl SymCsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] if `row >= n`
-    pub fn row_iter(&self, row: usize) -> Result<SymRowIter<'_>> {
+    pub fn row_iter(&self, row: usize) -> Result<SymRowIter<'_, T>> {
         if row >= self.n {
             return Err(SparseError::RowOutOfRange { row, nrows: self.n });
         }
@@ -104,7 +105,7 @@ impl SymCsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] if `row >= n`
-    pub fn upper_row_iter(&self, row: usize) -> Result<UpperRowIter<'_>> {
+    pub fn upper_row_iter(&self, row: usize) -> Result<UpperRowIter<'_, T>> {
         if row >= self.n {
             return Err(SparseError::RowOutOfRange { row, nrows: self.n });
         }
@@ -118,7 +119,7 @@ impl SymCsrMatrix {
 
     /// Iterate over every stored (upper-triangle + diagonal) entry.
     /// Yields `(row, col, value)` triples in row-major order.
-    pub fn iter_upper(&self) -> impl Iterator<Item = (usize, usize, f64)> + '_ {
+    pub fn iter_upper(&self) -> impl Iterator<Item = (usize, usize, T)> + '_ {
         (0..self.n).flat_map(move |row| {
             let start = self.row_ptr[row];
             let end   = self.row_ptr[row + 1];
@@ -134,7 +135,7 @@ impl SymCsrMatrix {
 mod tests {
     use super::*;
 
-    fn tridiag() -> SymCsrMatrix {
+    fn tridiag() -> SymCsrMatrix<f64> {
         let pattern = vec![vec![0usize, 1], vec![1, 2], vec![2]];
         let mut m = SymCsrMatrix::from_pattern(3, &pattern).unwrap();
         m.set_value(0, 0,  4.0).unwrap();

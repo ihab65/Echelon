@@ -1,6 +1,6 @@
 use std::fmt;
 use crate::error::{SparseError, Result};
-use crate::SparseMatrix;
+use crate::{SparseMatrix, SparseScalar};
 
 /// Compressed Sparse Row matrix — general (unsymmetric) storage.
 ///
@@ -16,8 +16,8 @@ use crate::SparseMatrix;
 /// Fields are `pub(crate)` — sibling modules can read internals directly
 /// without exposing them outside the crate.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CsrMatrix {
-    pub(crate) values:  Vec<f64>,
+pub struct CsrMatrix<T: SparseScalar> {
+    pub(crate) values:  Vec<T>,
     pub(crate) col_idx: Vec<usize>,
     pub(crate) row_ptr: Vec<usize>,
     pub nrows: usize,
@@ -28,7 +28,7 @@ pub struct CsrMatrix {
 // SparseMatrix trait impl
 // -----------------------------------------------------------------
 
-impl SparseMatrix for CsrMatrix {
+impl<T: SparseScalar> SparseMatrix for CsrMatrix<T> {
     #[inline] fn nrows(&self)    -> usize { self.nrows }
     #[inline] fn ncols(&self)    -> usize { self.ncols }
     #[inline] fn nnz(&self)      -> usize { self.nnz() }
@@ -39,7 +39,7 @@ impl SparseMatrix for CsrMatrix {
 // Construction
 // -----------------------------------------------------------------
 
-impl CsrMatrix {
+impl<T: SparseScalar> CsrMatrix<T> {
     /// Build a zero-valued CSR matrix from a sparsity pattern.
     ///
     /// `pattern[i]` is the list of column indices that are structurally
@@ -94,7 +94,7 @@ impl CsrMatrix {
         }
 
         let nnz = col_idx.len();
-        Ok(Self { values: vec![0.0; nnz], col_idx, row_ptr, nrows, ncols })
+        Ok(Self { values: vec![T::zero(); nnz], col_idx, row_ptr, nrows, ncols })
     }
 
     /// Build the global stiffness pattern from element DOF connectivity.
@@ -141,7 +141,7 @@ impl CsrMatrix {
         ncols: usize,
         row_ptr: Vec<usize>,
         col_idx: Vec<usize>,
-        values: Vec<f64>,
+        values: Vec<T>,
     ) -> Self {
         Self { values, col_idx, row_ptr, nrows, ncols }
     }
@@ -151,7 +151,7 @@ impl CsrMatrix {
 // Accessors
 // -----------------------------------------------------------------
 
-impl CsrMatrix {
+impl<T: SparseScalar> CsrMatrix<T> {
     /// Number of structurally non-zero entries.
     #[inline]
     pub fn nnz(&self) -> usize {
@@ -169,7 +169,7 @@ impl CsrMatrix {
 
     /// Raw values array.
     #[inline]
-    pub fn values(&self) -> &[f64] { &self.values }
+    pub fn values(&self) -> &[T] { &self.values }
     
     /// Value at `(row, col)`.
     ///
@@ -178,9 +178,9 @@ impl CsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
-    pub fn get(&self, row: usize, col: usize) -> Result<f64> {
+    pub fn get(&self, row: usize, col: usize) -> Result<T> {
         self.check_bounds(row, col)?;
-        Ok(self.find_idx(row, col).map_or(0.0, |i| self.values[i]))
+        Ok(self.find_idx(row, col).map_or(T::zero(), |i| self.values[i]))
     }
 }
 
@@ -188,13 +188,13 @@ impl CsrMatrix {
 // Mutation
 // -----------------------------------------------------------------
 
-impl CsrMatrix {
+impl<T: SparseScalar> CsrMatrix<T> {
     /// Accumulate `val` into `(row, col)`.
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
     /// - [`SparseError::IndexOutOfBounds`] if `(row, col)` is absent
-    pub fn add_value(&mut self, row: usize, col: usize, val: f64) -> Result<()> {
+    pub fn add_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_bounds(row, col)?;
         let idx = self.find_idx(row, col)
             .ok_or(SparseError::IndexOutOfBounds { row, col })?;
@@ -208,7 +208,7 @@ impl CsrMatrix {
     ///
     /// # Errors
     /// Same as [`add_value`].
-    pub fn set_value(&mut self, row: usize, col: usize, val: f64) -> Result<()> {
+    pub fn set_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_bounds(row, col)?;
         let idx = self.find_idx(row, col)
             .ok_or(SparseError::IndexOutOfBounds { row, col })?;
@@ -221,7 +221,7 @@ impl CsrMatrix {
     /// Call at the start of every assembly pass.
     #[inline]
     pub fn zero(&mut self) {
-        self.values.fill(0.0);
+        self.values.fill(T::zero());
     }
 
     /// Scatter dense element stiffness `ke` (row-major `n×n`) into the global
@@ -233,7 +233,7 @@ impl CsrMatrix {
     /// # Errors
     /// - [`SparseError::ScatterSizeMismatch`] if `ke.len() != dof_map.len()²`
     /// - [`SparseError::IndexOutOfBounds`] if a mapped position is absent
-    pub fn scatter_add(&mut self, ke: &[f64], dof_map: &[usize]) -> Result<()> {
+    pub fn scatter_add(&mut self, ke: &[T], dof_map: &[usize]) -> Result<()> {
         let n = dof_map.len();
         let expected = n * n;
         if ke.len() != expected {
@@ -257,12 +257,12 @@ impl CsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::NotSquare`]
-    pub fn extract_diagonal(&self) -> Result<Vec<f64>> {
+    pub fn extract_diagonal(&self) -> Result<Vec<T>> {
         if self.nrows != self.ncols {
             return Err(SparseError::NotSquare { nrows: self.nrows, ncols: self.ncols });
         }
         Ok((0..self.nrows)
-            .map(|i| self.find_idx(i, i).map_or(0.0, |idx| self.values[idx]))
+            .map(|i| self.find_idx(i, i).map_or(T::zero(), |idx| self.values[idx]))
             .collect())
     }
 
@@ -281,15 +281,15 @@ impl CsrMatrix {
         let start = self.row_ptr[dof];
         let end   = self.row_ptr[dof + 1];
         for idx in start..end {
-            self.values[idx] = 0.0;
+            self.values[idx] = T::zero();
         }
         for row in 0..self.nrows {
             if row == dof { continue; }
             if let Some(idx) = self.find_idx(row, dof) {
-                self.values[idx] = 0.0;
+                self.values[idx] = T::zero();
             }
         }
-        self.set_value(dof, dof, 1.0)
+        self.set_value(dof, dof, T::one())
     }
 }
 
@@ -297,7 +297,7 @@ impl CsrMatrix {
 // Validation
 // -----------------------------------------------------------------
 
-impl CsrMatrix {
+impl<T: SparseScalar> CsrMatrix<T> {
     /// Verify all internal invariants.
     pub fn validate(&self) -> Result<()> {
         if self.row_ptr.len() != self.nrows + 1 {
@@ -334,7 +334,7 @@ impl CsrMatrix {
 // Private helpers
 // -----------------------------------------------------------------
 
-impl CsrMatrix {
+impl<T: SparseScalar> CsrMatrix<T> {
     /// Binary search for the storage index of `(row, col)`.
     /// Columns within each row are sorted — O(log nnz/row).
     #[inline]
@@ -363,12 +363,12 @@ impl CsrMatrix {
 // Display
 // -----------------------------------------------------------------
 
-impl fmt::Display for CsrMatrix {
+impl<T: SparseScalar> fmt::Display for CsrMatrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for row in 0..self.nrows {
             write!(f, "[")?;
             for col in 0..self.ncols {
-                let val = self.find_idx(row, col).map_or(0.0, |i| self.values[i]);
+                let val = self.find_idx(row, col).map_or(T::zero(), |i| self.values[i]);
                 if col > 0 { write!(f, ", ")?; }
                 write!(f, "{val:8.4}")?;
             }
@@ -386,7 +386,7 @@ impl fmt::Display for CsrMatrix {
 mod tests {
     use super::*;
 
-    pub(super) fn sample() -> CsrMatrix {
+    pub(super) fn sample() -> CsrMatrix<f64> {
         // [1 0 2]
         // [0 3 4]
         // [0 0 5]
@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn from_pattern_structure() {
         let pattern = vec![vec![0usize, 2], vec![0, 1, 2], vec![1, 2]];
-        let csr = CsrMatrix::from_pattern(3, 3, &pattern).unwrap();
+        let csr = CsrMatrix::<f64>::from_pattern(3, 3, &pattern).unwrap();
         assert_eq!(csr.row_ptr, vec![0, 2, 5, 7]);
         assert_eq!(csr.col_idx, vec![0, 2, 0, 1, 2, 1, 2]);
         assert!(csr.values.iter().all(|&v| v == 0.0));
@@ -411,14 +411,14 @@ mod tests {
 
     #[test]
     fn from_pattern_deduplicates_and_sorts() {
-        let m = CsrMatrix::from_pattern(1, 3, &[vec![2usize, 0, 0, 1]]).unwrap();
+        let m = CsrMatrix::<f64>::from_pattern(1, 3, &[vec![2usize, 0, 0, 1]]).unwrap();
         assert_eq!(m.col_idx, vec![0, 1, 2]);
     }
 
     #[test]
     fn from_pattern_err_length() {
         assert!(matches!(
-            CsrMatrix::from_pattern(2, 3, &[vec![0usize]]).unwrap_err(),
+            CsrMatrix::<f64>::from_pattern(2, 3, &[vec![0usize]]).unwrap_err(),
             SparseError::PatternLengthMismatch { .. }
         ));
     }
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn from_pattern_err_col_range() {
         assert!(matches!(
-            CsrMatrix::from_pattern(1, 3, &[vec![0usize, 99]]).unwrap_err(),
+            CsrMatrix::<f64>::from_pattern(1, 3, &[vec![0usize, 99]]).unwrap_err(),
             SparseError::ColOutOfRange { col: 99, .. }
         ));
     }

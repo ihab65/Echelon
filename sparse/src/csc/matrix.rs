@@ -1,6 +1,7 @@
 use std::fmt;
+
 use crate::error::{SparseError, Result};
-use crate::SparseMatrix;
+use crate::{SparseMatrix, SparseScalar};
 
 /// Compressed Sparse Column matrix — column-oriented storage.
 ///
@@ -17,8 +18,8 @@ use crate::SparseMatrix;
 /// - within each column row indices are **sorted ascending and unique**
 /// - `values.len() == row_idx.len() == col_ptr[ncols]`
 #[derive(Debug, Clone, PartialEq)]
-pub struct CscMatrix {
-    pub(crate) values:  Vec<f64>,
+pub struct CscMatrix<T: SparseScalar> {
+    pub(crate) values:  Vec<T>,
     pub(crate) row_idx: Vec<usize>,
     pub(crate) col_ptr: Vec<usize>,
     pub nrows: usize,
@@ -29,7 +30,7 @@ pub struct CscMatrix {
 // SparseMatrix trait
 // -----------------------------------------------------------------
 
-impl SparseMatrix for CscMatrix {
+impl<T: SparseScalar> SparseMatrix for CscMatrix<T> {
     #[inline] fn nrows(&self)  -> usize { self.nrows }
     #[inline] fn ncols(&self)  -> usize { self.ncols }
     #[inline] fn nnz(&self)    -> usize { self.nnz() }
@@ -40,7 +41,7 @@ impl SparseMatrix for CscMatrix {
 // Construction
 // -----------------------------------------------------------------
 
-impl CscMatrix {
+impl<T: SparseScalar> CscMatrix<T> {
     /// Build a zero-valued CSC matrix from a column-oriented sparsity pattern.
     ///
     /// `pattern[j]` lists the row indices that are structurally non-zero in
@@ -94,7 +95,7 @@ impl CscMatrix {
         }
 
         let nnz = row_idx.len();
-        Ok(Self { values: vec![0.0; nnz], row_idx, col_ptr, nrows, ncols })
+        Ok(Self { values: vec![T::zero(); nnz], row_idx, col_ptr, nrows, ncols })
     }
 
     /// Build from raw CSC arrays (used by the conversion utilities).
@@ -106,7 +107,7 @@ impl CscMatrix {
         ncols: usize,
         col_ptr: Vec<usize>,
         row_idx: Vec<usize>,
-        values: Vec<f64>,
+        values: Vec<T>,
     ) -> Self {
         Self { values, row_idx, col_ptr, nrows, ncols }
     }
@@ -116,7 +117,7 @@ impl CscMatrix {
 // Accessors
 // -----------------------------------------------------------------
 
-impl CscMatrix {
+impl<T: SparseScalar> CscMatrix<T> {
     /// Number of structurally non-zero entries.
     #[inline]
     pub fn nnz(&self) -> usize {
@@ -134,7 +135,7 @@ impl CscMatrix {
 
     /// Raw values array.
     #[inline]
-    pub fn values(&self) -> &[f64] { &self.values }
+    pub fn values(&self) -> &[T] { &self.values }
 
     /// Value at `(row, col)`.
     ///
@@ -142,9 +143,9 @@ impl CscMatrix {
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
-    pub fn get(&self, row: usize, col: usize) -> Result<f64> {
+    pub fn get(&self, row: usize, col: usize) -> Result<T> {
         self.check_bounds(row, col)?;
-        Ok(self.find_idx(row, col).map_or(0.0, |i| self.values[i]))
+        Ok(self.find_idx(row, col).map_or(T::zero(), |i| self.values[i]))
     }
 }
 
@@ -152,13 +153,13 @@ impl CscMatrix {
 // Mutation
 // -----------------------------------------------------------------
 
-impl CscMatrix {
+impl<T: SparseScalar> CscMatrix<T> {
     /// Accumulate `val` into `(row, col)`.
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
     /// - [`SparseError::IndexOutOfBounds`] if absent from pattern
-    pub fn add_value(&mut self, row: usize, col: usize, val: f64) -> Result<()> {
+    pub fn add_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_bounds(row, col)?;
         let idx = self.find_idx(row, col)
             .ok_or(SparseError::IndexOutOfBounds { row, col })?;
@@ -170,7 +171,7 @@ impl CscMatrix {
     ///
     /// # Errors
     /// Same as [`add_value`].
-    pub fn set_value(&mut self, row: usize, col: usize, val: f64) -> Result<()> {
+    pub fn set_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_bounds(row, col)?;
         let idx = self.find_idx(row, col)
             .ok_or(SparseError::IndexOutOfBounds { row, col })?;
@@ -181,19 +182,19 @@ impl CscMatrix {
     /// Set all stored values to `0.0` while keeping the pattern.
     #[inline]
     pub fn zero(&mut self) {
-        self.values.fill(0.0);
+        self.values.fill(T::zero());
     }
 
     /// Extract the diagonal into a `Vec<f64>`.
     ///
     /// # Errors
     /// - [`SparseError::NotSquare`]
-    pub fn extract_diagonal(&self) -> Result<Vec<f64>> {
+    pub fn extract_diagonal(&self) -> Result<Vec<T>> {
         if self.nrows != self.ncols {
             return Err(SparseError::NotSquare { nrows: self.nrows, ncols: self.ncols });
         }
         Ok((0..self.ncols)
-            .map(|j| self.find_idx(j, j).map_or(0.0, |i| self.values[i]))
+            .map(|j| self.find_idx(j, j).map_or(T::zero(), |i| self.values[i]))
             .collect())
     }
 }
@@ -202,7 +203,7 @@ impl CscMatrix {
 // Validation
 // -----------------------------------------------------------------
 
-impl CscMatrix {
+impl<T: SparseScalar> CscMatrix<T> {
     /// Verify all internal invariants.
     pub fn validate(&self) -> Result<()> {
         if self.col_ptr.len() != self.ncols + 1 {
@@ -239,7 +240,7 @@ impl CscMatrix {
 // Private helpers
 // -----------------------------------------------------------------
 
-impl CscMatrix {
+impl<T: SparseScalar> CscMatrix<T> {
     /// Binary search for the storage index of `(row, col)`.
     /// Row indices within each column are sorted.
     #[inline]
@@ -268,12 +269,12 @@ impl CscMatrix {
 // Display
 // -----------------------------------------------------------------
 
-impl fmt::Display for CscMatrix {
+impl<T:SparseScalar> fmt::Display for CscMatrix<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for row in 0..self.nrows {
             write!(f, "[")?;
             for col in 0..self.ncols {
-                let val = self.find_idx(row, col).map_or(0.0, |i| self.values[i]);
+                let val = self.find_idx(row, col).map_or(T::zero(), |i| self.values[i]);
                 if col > 0 { write!(f, ", ")?; }
                 write!(f, "{val:8.4}")?;
             }
@@ -291,7 +292,7 @@ impl fmt::Display for CscMatrix {
 mod tests {
     use super::*;
 
-    fn sample() -> CscMatrix {
+    fn sample() -> CscMatrix<f64> {
         // Same matrix as CsrMatrix sample:
         // [1 0 2]
         // [0 3 4]
@@ -317,14 +318,14 @@ mod tests {
 
     #[test]
     fn from_pattern_deduplicates_and_sorts() {
-        let m = CscMatrix::from_pattern(3, 1, &[vec![2usize, 0, 0, 1]]).unwrap();
+        let m = CscMatrix::<f64>::from_pattern(3, 1, &[vec![2usize, 0, 0, 1]]).unwrap();
         assert_eq!(m.row_idx, vec![0, 1, 2]);
     }
 
     #[test]
     fn from_pattern_err_length() {
         assert!(matches!(
-            CscMatrix::from_pattern(3, 2, &[vec![0usize]]).unwrap_err(),
+            CscMatrix::<f64>::from_pattern(3, 2, &[vec![0usize]]).unwrap_err(),
             SparseError::PatternLengthMismatch { .. }
         ));
     }
@@ -332,7 +333,7 @@ mod tests {
     #[test]
     fn from_pattern_err_row_range() {
         assert!(matches!(
-            CscMatrix::from_pattern(3, 1, &[vec![99usize]]).unwrap_err(),
+            CscMatrix::<f64>::from_pattern(3, 1, &[vec![99usize]]).unwrap_err(),
             SparseError::RowOutOfRange { row: 99, .. }
         ));
     }

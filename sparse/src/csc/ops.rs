@@ -1,8 +1,11 @@
+use crate::SparseScalar;
 use crate::error::{SparseError, Result};
 use crate::csc::CscMatrix;
 use crate::csr::ops::MatvecWorkspace;
+use std::iter::Sum;
+use std::ops::AddAssign;
 
-impl CscMatrix {
+impl<T: SparseScalar + Sum + AddAssign> CscMatrix<T> {
     /// Compute `y = A * x` — **no heap allocation**.
     ///
     /// In CSC, `Ax` is less natural than `Aᵀx`: we compute it as a sum
@@ -10,7 +13,7 @@ impl CscMatrix {
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`]
-    pub fn matvec_into(&self, x: &[f64], ws: &mut MatvecWorkspace) -> Result<()> {
+    pub fn matvec_into(&self, x: &[T], ws: &mut MatvecWorkspace<T>) -> Result<()> {
         if x.len() != self.ncols {
             return Err(SparseError::DimensionMismatch {
                 expected: self.ncols, got: x.len(),
@@ -21,7 +24,7 @@ impl CscMatrix {
                 expected: self.nrows, got: ws.buffer.len(),
             });
         }
-        ws.buffer.fill(0.0);
+        ws.buffer.fill(T::zero());
         for col in 0..self.ncols {
             let start = self.col_ptr[col];
             let end   = self.col_ptr[col + 1];
@@ -33,8 +36,8 @@ impl CscMatrix {
         Ok(())
     }
 
-    /// Compute `y = A * x`, returning an allocated `Vec<f64>`.
-    pub fn matvec(&self, x: &[f64]) -> Result<Vec<f64>> {
+    /// Compute `y = A * x`, returning an allocated `Vec<T>`.
+    pub fn matvec(&self, x: &[T]) -> Result<Vec<T>> {
         let mut ws = MatvecWorkspace::new(self.nrows);
         self.matvec_into(x, &mut ws)?;
         Ok(ws.buffer)
@@ -46,7 +49,7 @@ impl CscMatrix {
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`]
-    pub fn matvec_transpose_into(&self, x: &[f64], ws: &mut MatvecWorkspace) -> Result<()> {
+    pub fn matvec_transpose_into(&self, x: &[T], ws: &mut MatvecWorkspace<T>) -> Result<()> {
         if x.len() != self.nrows {
             return Err(SparseError::DimensionMismatch {
                 expected: self.nrows, got: x.len(),
@@ -57,11 +60,11 @@ impl CscMatrix {
                 expected: self.ncols, got: ws.buffer.len(),
             });
         }
-        ws.buffer.fill(0.0);
+        ws.buffer.fill(T::zero());
         for col in 0..self.ncols {
             let start = self.col_ptr[col];
             let end   = self.col_ptr[col + 1];
-            let dot: f64 = self.row_idx[start..end]
+            let dot: T = self.row_idx[start..end]
                 .iter()
                 .zip(&self.values[start..end])
                 .map(|(&row, &val)| val * x[row])
@@ -71,21 +74,21 @@ impl CscMatrix {
         Ok(())
     }
 
-    /// Compute `y = Aᵀ * x`, returning an allocated `Vec<f64>`.
-    pub fn matvec_transpose(&self, x: &[f64]) -> Result<Vec<f64>> {
+    /// Compute `y = Aᵀ * x`, returning an allocated `Vec<T>`.
+    pub fn matvec_transpose(&self, x: &[T]) -> Result<Vec<T>> {
         let mut ws = MatvecWorkspace::new(self.ncols);
         self.matvec_transpose_into(x, &mut ws)?;
         Ok(ws.buffer)
     }
 
     /// Scale every stored value by `alpha` in place.
-    pub fn scale(&mut self, alpha: f64) {
+    pub fn scale(&mut self, alpha: T) {
         self.values.iter_mut().for_each(|v| *v *= alpha);
     }
 
     /// Frobenius norm: `sqrt(Σ aᵢⱼ²)`.
-    pub fn frobenius_norm(&self) -> f64 {
-        self.values.iter().map(|&v| v * v).sum::<f64>().sqrt()
+    pub fn frobenius_norm(&self) -> T {
+        self.values.iter().map(|&v| v * v).sum::<T>().sqrt()
     }
 }
 
@@ -93,12 +96,12 @@ impl CscMatrix {
 mod tests {
     use super::*;
 
-    fn sample() -> CscMatrix {
+    fn sample() -> CscMatrix<f64> {
         // [1 0 2]
         // [0 3 4]
         // [0 0 5]
         let pattern = vec![vec![0usize], vec![1], vec![0, 1, 2]];
-        let mut m = CscMatrix::from_pattern(3, 3, &pattern).unwrap();
+        let mut m = CscMatrix::<f64>::from_pattern(3, 3, &pattern).unwrap();
         m.set_value(0, 0, 1.0).unwrap();
         m.set_value(1, 1, 3.0).unwrap();
         m.set_value(0, 2, 2.0).unwrap();

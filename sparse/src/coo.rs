@@ -17,6 +17,7 @@
 //! let csr = coo.build_csr().unwrap();
 //! ```
 
+use crate::SparseScalar;
 use crate::error::{SparseError, Result};
 use crate::csr::CsrMatrix;
 use crate::sym::SymCsrMatrix;
@@ -26,13 +27,13 @@ use crate::sym::SymCsrMatrix;
 /// Duplicate entries `(i, j)` are **summed** into a single stored value,
 /// matching FEM assembly semantics.
 #[derive(Debug, Clone)]
-pub struct CooBuilder {
+pub struct CooBuilder<T> {
     nrows:    usize,
     ncols:    usize,
-    triplets: Vec<(usize, usize, f64)>,
+    triplets: Vec<(usize, usize, T)>,
 }
 
-impl CooBuilder {
+impl<T: SparseScalar> CooBuilder<T> {
     /// Create a new builder for an `nrows × ncols` matrix.
     pub fn new(nrows: usize, ncols: usize) -> Self {
         Self { nrows, ncols, triplets: Vec::new() }
@@ -48,7 +49,7 @@ impl CooBuilder {
     /// Out-of-bounds triplets are silently accepted here and will cause an
     /// error only when `.build_csr()` / `.build_sym()` is called.
     #[inline]
-    pub fn add(&mut self, row: usize, col: usize, val: f64) {
+    pub fn add(&mut self, row: usize, col: usize, val: T) {
         self.triplets.push((row, col, val));
     }
 
@@ -67,7 +68,7 @@ impl CooBuilder {
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
     ///   if any triplet index is out of bounds
-    pub fn build_csr(self) -> Result<CsrMatrix> {
+    pub fn build_csr(self) -> Result<CsrMatrix<T>> {
         // Validate bounds
         for &(row, col, _) in &self.triplets {
             if row >= self.nrows {
@@ -80,9 +81,9 @@ impl CooBuilder {
 
         // Collect unique (row, col) pairs — use BTreeMap to sort and sum
         use std::collections::BTreeMap;
-        let mut map: BTreeMap<(usize, usize), f64> = BTreeMap::new();
+        let mut map: BTreeMap<(usize, usize), T> = BTreeMap::new();
         for (row, col, val) in self.triplets {
-            *map.entry((row, col)).or_insert(0.0) += val;
+            *map.entry((row, col)).or_insert(T::zero()) += val;
         }
 
         // Build pattern and fill values in one pass
@@ -109,7 +110,7 @@ impl CooBuilder {
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
     ///   if any triplet index is out of bounds
     /// - [`SparseError::NotSquare`] if `nrows != ncols`
-    pub fn build_sym(self) -> Result<SymCsrMatrix> {
+    pub fn build_sym(self) -> Result<SymCsrMatrix<T>> {
         if self.nrows != self.ncols {
             return Err(SparseError::NotSquare {
                 nrows: self.nrows,
@@ -128,11 +129,11 @@ impl CooBuilder {
         }
 
         use std::collections::BTreeMap;
-        let mut map: BTreeMap<(usize, usize), f64> = BTreeMap::new();
+        let mut map: BTreeMap<(usize, usize), T> = BTreeMap::new();
         for (row, col, val) in self.triplets {
             // mirror to upper triangle
             let (r, c) = if col >= row { (row, col) } else { (col, row) };
-            *map.entry((r, c)).or_insert(0.0) += val;
+            *map.entry((r, c)).or_insert(T::zero()) += val;
         }
 
         let mut pattern: Vec<Vec<usize>> = vec![Vec::new(); n];
@@ -151,8 +152,11 @@ impl CooBuilder {
 // Optional MTX loading support, gated behind the "io" feature. This is a convenient
 // way to get real-world sparse matrices into the library for testing and benchmarking.
 #[cfg(feature = "io")]
-impl CooBuilder {
-    pub fn from_mtx<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+impl<T: SparseScalar> CooBuilder<T> {
+    pub fn from_mtx<P: AsRef<std::path::Path>>(path: P) -> Result<Self>
+    where
+        T: From<f64>,
+    {
         // matrix_market_rs returns MtxData<T, NDIM>. We use f64 and default 2 dims.
         let mtx = matrix_market_rs::MtxData::<f64>::from_file(path)
             .map_err(|e| SparseError::IoError(format!("MTX parse error: {:?}", e)))?;
@@ -170,14 +174,14 @@ impl CooBuilder {
 
                     match sym_info {
                         matrix_market_rs::SymInfo::General => {
-                            builder.add(r, c, val);
+                            builder.add(r, c, <T as From<f64>>::from(val));
                         }
                         matrix_market_rs::SymInfo::Symmetric => {
                             // Ensure upper triangle (r <= c) for build_sym compatibility
                             if r > c {
                                 std::mem::swap(&mut r, &mut c);
                             }
-                            builder.add(r, c, val);
+                            builder.add(r, c, <T as From<f64>>::from(val));
                         }
                     }
                 }

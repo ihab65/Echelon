@@ -3,7 +3,7 @@
 use sparse::{CsrMatrix, SymCsrMatrix, CooBuilder};
 use sparse::convert::{csr_to_csc, csc_to_csr, sym_to_csc, csr_to_sym};
 
-fn sym_tridiag() -> SymCsrMatrix {
+fn sym_tridiag() -> SymCsrMatrix<f64> {
     let mut coo = CooBuilder::new(3, 3);
     coo.add(0, 0,  4.0); coo.add(0, 1, -1.0);
     coo.add(1, 1,  4.0); coo.add(1, 2, -1.0);
@@ -11,7 +11,7 @@ fn sym_tridiag() -> SymCsrMatrix {
     coo.build_sym().unwrap()
 }
 
-fn upper_triangular_csr() -> CsrMatrix {
+fn upper_triangular_csr() -> CsrMatrix<f64> {
     let mut coo = CooBuilder::new(3, 3);
     coo.add(0, 0, 1.0); coo.add(0, 2, 2.0);
     coo.add(1, 1, 3.0); coo.add(1, 2, 4.0);

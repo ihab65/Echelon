@@ -11,6 +11,7 @@
 //! 1. Count entries per destination row/column → build `ptr` array
 //! 2. Fill entries using the `ptr` as insertion cursors
 
+use crate::SparseScalar;
 use crate::{CsrMatrix, SymCsrMatrix, CscMatrix};
 use crate::error::{SparseError, Result};
 
@@ -21,7 +22,7 @@ use crate::error::{SparseError, Result};
 /// Convert a general CSR matrix to CSC format.
 ///
 /// This is the standard sparse matrix transpose algorithm: O(nnz).
-pub fn csr_to_csc(csr: &CsrMatrix) -> CscMatrix {
+pub fn csr_to_csc<T>(csr: &CsrMatrix<T>) -> CscMatrix<T> where T: SparseScalar {
     let nrows = csr.nrows;
     let ncols = csr.ncols;
     let nnz   = csr.nnz();
@@ -41,7 +42,7 @@ pub fn csr_to_csc(csr: &CsrMatrix) -> CscMatrix {
 
     // Pass 2: fill row_idx and values
     let mut row_idx = vec![0usize; nnz];
-    let mut values  = vec![0.0_f64; nnz];
+    let mut values  = vec![T::zero(); nnz];
     let mut cursor  = col_ptr[..ncols].to_vec(); // insertion cursors
 
     for row in 0..nrows {
@@ -66,7 +67,7 @@ pub fn csr_to_csc(csr: &CsrMatrix) -> CscMatrix {
 // -----------------------------------------------------------------
 
 /// Convert a CSC matrix to CSR format.
-pub fn csc_to_csr(csc: &CscMatrix) -> CsrMatrix {
+pub fn csc_to_csr<T>(csc: &CscMatrix<T>) -> CsrMatrix<T> where T: SparseScalar {
     let nrows = csc.nrows;
     let ncols = csc.ncols;
     let nnz   = csc.nnz();
@@ -86,7 +87,7 @@ pub fn csc_to_csr(csc: &CscMatrix) -> CsrMatrix {
 
     // Pass 2: fill col_idx and values
     let mut col_idx = vec![0usize; nnz];
-    let mut values  = vec![0.0_f64; nnz];
+    let mut values  = vec![T::zero(); nnz];
     let mut cursor  = row_ptr[..nrows].to_vec();
 
     for col in 0..ncols {
@@ -116,7 +117,7 @@ pub fn csc_to_csr(csc: &CscMatrix) -> CsrMatrix {
 ///
 /// The resulting CSC matrix stores both triangles explicitly.
 /// This is what you pass to the solver after applying BCs.
-pub fn sym_to_csc(sym: &SymCsrMatrix) -> CscMatrix {
+pub fn sym_to_csc<T>(sym: &SymCsrMatrix<T>) -> CscMatrix<T> where T: SparseScalar {
     let n   = sym.n;
     let nnz_upper = sym.nnz();
 
@@ -139,7 +140,7 @@ pub fn sym_to_csc(sym: &SymCsrMatrix) -> CscMatrix {
     }
 
     let mut row_idx = vec![0usize; nnz_full];
-    let mut values  = vec![0.0_f64; nnz_full];
+    let mut values  = vec![T::zero(); nnz_full];
     let mut cursor  = col_ptr[..n].to_vec();
 
     // Insert upper triangle and its mirror
@@ -165,7 +166,7 @@ pub fn sym_to_csc(sym: &SymCsrMatrix) -> CscMatrix {
         let end   = col_ptr[col + 1];
         // sort (row_idx, values) together by row_idx
         let slice_len = end - start;
-        let mut pairs: Vec<(usize, f64)> = row_idx[start..end]
+        let mut pairs: Vec<(usize, T)> = row_idx[start..end]
             .iter()
             .zip(&values[start..end])
             .map(|(&r, &v)| (r, v))
@@ -194,7 +195,7 @@ pub fn sym_to_csc(sym: &SymCsrMatrix) -> CscMatrix {
 ///
 /// # Errors
 /// - [`SparseError::NotSquare`] if the matrix is not square
-pub fn csr_to_sym(csr: &CsrMatrix) -> Result<SymCsrMatrix> {
+pub fn csr_to_sym<T>(csr: &CsrMatrix<T>) -> Result<SymCsrMatrix<T>> where T: SparseScalar {
     if csr.nrows != csr.ncols {
         return Err(SparseError::NotSquare { nrows: csr.nrows, ncols: csr.ncols });
     }
@@ -229,7 +230,7 @@ pub fn csr_to_sym(csr: &CsrMatrix) -> Result<SymCsrMatrix> {
 mod tests {
     use super::*;
 
-    fn sym_tridiag() -> SymCsrMatrix {
+    fn sym_tridiag() -> SymCsrMatrix<f64> {
         // [ 4 -1  0]
         // [-1  4 -1]
         // [ 0 -1  4]
@@ -243,7 +244,7 @@ mod tests {
         m
     }
 
-    fn full_csr() -> CsrMatrix {
+    fn full_csr() -> CsrMatrix<f64> {
         // [1 0 2]
         // [0 3 4]
         // [0 0 5]
@@ -280,7 +281,7 @@ mod tests {
     fn csr_to_csc_matvec_agrees() {
         let csr = full_csr();
         let csc = csr_to_csc(&csr);
-        let x = vec![1.0_f64, 2.0, 3.0];
+        let x = vec![0.0, 2.0, 3.0];
         assert_eq!(csr.matvec(&x).unwrap(), csc.matvec(&x).unwrap());
     }
 
@@ -293,7 +294,7 @@ mod tests {
         let csr_back = csc_to_csr(&csc);
         csr_back.validate().unwrap();
         // matvec must agree
-        let x = vec![1.0_f64, 2.0, 3.0];
+        let x = vec![0.0, 2.0, 3.0];
         assert_eq!(csr_orig.matvec(&x).unwrap(), csr_back.matvec(&x).unwrap());
     }
 
@@ -317,7 +318,7 @@ mod tests {
     fn sym_to_csc_matvec_agrees_with_sym_matvec() {
         let sym = sym_tridiag();
         let csc = sym_to_csc(&sym);
-        let x   = vec![1.0_f64, 2.0, 3.0];
+        let x   = vec![0.0, 2.0, 3.0];
 
         let y_sym: Vec<f64> = sym.matvec(&x).unwrap();
         let y_csc: Vec<f64> = csc.matvec(&x).unwrap();
@@ -351,7 +352,7 @@ mod tests {
 
     #[test]
     fn csr_to_sym_err_not_square() {
-        let m = CsrMatrix::from_pattern(2, 3, &[vec![0usize], vec![0usize]]).unwrap();
+        let m = CsrMatrix::<f64>::from_pattern(2, 3, &[vec![0usize], vec![0usize]]).unwrap();
         assert!(matches!(csr_to_sym(&m).unwrap_err(), SparseError::NotSquare { .. }));
     }
 
@@ -364,7 +365,7 @@ mod tests {
         let csr = csc_to_csr(&csc);
         csr.validate().unwrap();
 
-        let x = vec![1.0_f64, 2.0, 3.0];
+        let x = vec![0.0, 2.0, 3.0];
         let y_sym = sym.matvec(&x).unwrap();
         let y_csr = csr.matvec(&x).unwrap();
         for (a, b) in y_sym.iter().zip(y_csr.iter()) {

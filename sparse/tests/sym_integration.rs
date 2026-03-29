@@ -2,7 +2,7 @@
 
 use sparse::{SymCsrMatrix, SparseError, SparseMatrix, CooBuilder};
 
-fn tridiag() -> SymCsrMatrix {
+fn tridiag() -> SymCsrMatrix<f64> {
     // [ 4 -1  0]
     // [-1  4 -1]
     // [ 0 -1  4]
