@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 # No external dependencies — this crate is pure type definitions
 # and small fixed-size computations.
+sparse = { path = "../sparse" }
 
 [dev-dependencies]
 # none

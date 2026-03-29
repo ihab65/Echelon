@@ -39,6 +39,7 @@ pub mod transform;
 pub use ids::{NodeId, ElemId, GlobalDof, LocalDof};
 pub use dof_map::DofMap;
 pub use model::ModelDim;
+use sparse::SparseScalar;
 pub use transform::CoordTransf2d;
 
 // -----------------------------------------------------------------
@@ -50,7 +51,7 @@ pub use transform::CoordTransf2d;
 // here.
 // -----------------------------------------------------------------
 #[allow(dead_code)]
-fn _assert_send_sync() {
+fn _assert_send_sync<T: SparseScalar>() {
     fn req<T: Send + Sync>() {}
     req::<NodeId>();
     req::<ElemId>();
@@ -58,5 +59,5 @@ fn _assert_send_sync() {
     req::<LocalDof>();
     req::<DofMap>();
     req::<ModelDim>();
-    req::<CoordTransf2d>();
+    req::<CoordTransf2d<T>>();
 }

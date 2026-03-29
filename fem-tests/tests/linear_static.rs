@@ -148,7 +148,7 @@ fn beam2d_ke_local(e: f64, a: f64, iz: f64, l: f64) -> [[f64; 6]; 6] {
     let b3   =  4.0 * ei / l;   //  4EI/L
     let b4   =  2.0 * ei / l;   //  2EI/L
 
-    let mut ke = mat_zero::<6>();
+    let mut ke = mat_zero::<6, f64>();
     // axial DOFs (0 and 3)
     ke[0][0] =  eal;  ke[0][3] = -eal;
     ke[3][0] = -eal;  ke[3][3] =  eal;
