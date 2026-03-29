@@ -44,6 +44,7 @@ pub use sym::SymCsrMatrix;
 pub use csc::CscMatrix;
 pub use csr::ops::MatvecWorkspace;
 
+use std::fmt::{Debug, Display};
 // -----------------------------------------------------------------
 // SparseMatrix trait
 //
@@ -51,6 +52,44 @@ pub use csr::ops::MatvecWorkspace;
 // `&impl SparseMatrix` so it doesn't need to know which format it
 // has been handed.
 // -----------------------------------------------------------------
+
+pub trait SparseScalar:
+    Copy + Clone + Debug + PartialEq
+    + num_traits::Zero           // additive identity
+    + num_traits::One            // multiplicative identity
+    + num_traits::Num            // +, -, *, /, %
+    + num_traits::NumAssign      // +=, -=, *=, /=
+    + num_traits::Signed         // abs, signum — Dual64 implements this
+    + Send + Sync
+    + Display
+    + 'static
+{
+    /// Extract the real part for SPD checks and convergence tests.
+    fn real_part(&self) -> f64;
+
+    /// Square root — delegates to Float::sqrt for f32/f64,
+    /// and to Dual64's own sqrt for autodiff.
+    fn scalar_sqrt(self) -> Self;
+}
+
+impl SparseScalar for f64 {
+    fn real_part(&self) -> f64 { *self }
+    fn scalar_sqrt(self) -> Self { f64::sqrt(self) }
+}
+
+impl SparseScalar for f32 {
+    fn real_part(&self) -> f64 { *self as f64 }
+    fn scalar_sqrt(self) -> Self { f32::sqrt(self) }
+}
+
+#[cfg(feature = "autodiff")]
+impl SparseScalar for num_dual::Dual64 {
+    fn real_part(&self) -> f64 { self.re }
+    fn scalar_sqrt(self) -> Self {
+        use num_dual::DualNum;
+        self.sqrt() 
+    }
+}
 
 /// Common interface shared by all sparse matrix types in this crate.
 pub trait SparseMatrix {
@@ -85,10 +124,10 @@ pub trait SparseMatrix {
 // If a future change breaks thread-safety the compiler catches it here.
 // -----------------------------------------------------------------
 #[allow(dead_code)]
-fn _assert_send_sync() {
+fn _assert_send_sync<T: SparseScalar>() {
     fn req<T: Send + Sync>() {}
-    req::<CsrMatrix>();
-    req::<SymCsrMatrix>();
-    req::<CscMatrix>();
-    req::<MatvecWorkspace>();
+    req::<CsrMatrix<T>>();
+    req::<SymCsrMatrix<T>>();
+    req::<CscMatrix<T>>();
+    req::<MatvecWorkspace<T>>();
 }

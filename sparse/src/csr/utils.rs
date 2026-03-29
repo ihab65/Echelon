@@ -1,6 +1,6 @@
-use crate::csr::CsrMatrix;
+use crate::{SparseScalar, csr::CsrMatrix};
 
-impl CsrMatrix {
+impl<T: SparseScalar> CsrMatrix<T> {
     /// Summary statistics for the matrix.  Cheap to call at any time.
     pub fn stats(&self) -> MatrixStats {
         let nnz = self.nnz();
@@ -24,8 +24,8 @@ impl CsrMatrix {
     /// **Debug builds only** — allocates `nrows × ncols` memory.
     /// Use for small matrices in tests; never call in production.
     #[cfg(debug_assertions)]
-    pub fn to_dense(&self) -> Vec<Vec<f64>> {
-        let mut dense = vec![vec![0.0_f64; self.ncols]; self.nrows];
+    pub fn to_dense(&self) -> Vec<Vec<T>> {
+        let mut dense = vec![vec![T::zero(); self.ncols]; self.nrows];
         for (row, col, val) in self.iter_nonzeros() {
             dense[row][col] = val;
         }
@@ -60,7 +60,7 @@ impl std::fmt::Display for MatrixStats {
 mod tests {
     use super::*;
 
-    fn sample() -> CsrMatrix {
+    fn sample() -> CsrMatrix<f64> {
         let pattern = vec![vec![0usize, 2], vec![1, 2], vec![2]];
         let mut m = CsrMatrix::from_pattern(3, 3, &pattern).unwrap();
         m.add_value(0, 0, 1.0).unwrap();

@@ -32,6 +32,8 @@
 //! `i > j` are already computed in the working buffer.  We read them
 //! together with `L[i,j]` from column j of L.
 
+use sparse::SparseScalar;
+
 use crate::error::{SolverError, Result};
 use crate::ordering::Permutation;
 use super::numeric::NumericCholesky;
@@ -48,13 +50,15 @@ use super::symbolic::SymbolicCholesky;
 ///
 /// # Errors
 /// - [`SolverError::RhsSizeMismatch`] if `f.len() != n` or `u.len() != n`
-pub fn solve(
+pub fn solve<T>(
     sym:  &SymbolicCholesky,
-    num:  &NumericCholesky,
+    num:  &NumericCholesky<T>,
     perm: &Permutation,
-    f:    &[f64],
-    u:    &mut [f64],
-) -> Result<()> {
+    f:    &[T],
+    u:    &mut [T],
+) -> Result<()> 
+    where T: SparseScalar
+{
     let n = num.n;
     if f.len() != n {
         return Err(SolverError::RhsSizeMismatch { expected: n, got: f.len() });
@@ -88,7 +92,7 @@ pub fn solve(
 
         // Diagonal is always stored first in each L column.
         let ljj = num.values[l_start];
-        debug_assert!(ljj > 0.0, "L[{j},{j}] must be positive");
+        debug_assert!(ljj.real_part() > T::zero().real_part(), "L[{j},{j}] must be positive");
 
         u[j] /= ljj;
         let yj = u[j];
@@ -131,7 +135,7 @@ pub fn solve(
     // x_perm is in u[0..n].  We need to scatter it back to original order.
     // We need a temporary copy to avoid aliasing.
     // ------------------------------------------------------------------
-    let x_perm: Vec<f64> = u.to_vec();
+    let x_perm: Vec<T> = u.to_vec();
     for i in 0..n {
         u[perm.old_index(i)] = x_perm[i];
     }
@@ -153,7 +157,7 @@ mod tests {
 
     // ---- solve helpers ----
 
-    fn solve_direct(k: &SymCsrMatrix, f: &[f64]) -> Vec<f64> {
+    fn solve_direct(k: &SymCsrMatrix<f64>, f: &[f64]) -> Vec<f64> {
         let p   = Permutation::identity(k.n);
         let csc = sym_to_csc(k);
         let sym = analyze(&csc).unwrap();
@@ -163,7 +167,7 @@ mod tests {
         u
     }
 
-    fn solve_rcm(k: &SymCsrMatrix, f: &[f64]) -> Vec<f64> {
+    fn solve_rcm(k: &SymCsrMatrix<f64>, f: &[f64]) -> Vec<f64> {
         let g    = Graph::from_sym(k);
         let perm = rcm(&g);
         let kp   = perm.permute_sym(k).unwrap();
@@ -176,7 +180,7 @@ mod tests {
     }
 
     /// Check that K * u ≈ f (residual check).
-    fn check_residual(k: &SymCsrMatrix, f: &[f64], u: &[f64]) {
+    fn check_residual(k: &SymCsrMatrix<f64>, f: &[f64], u: &[f64]) {
         let ku = k.matvec(u).unwrap();
         for (i, (&kui, &fi)) in ku.iter().zip(f.iter()).enumerate() {
             let err = (kui - fi).abs();
@@ -228,7 +232,7 @@ mod tests {
 
     // ---- tridiagonal, identity permutation ----
 
-    fn tridiag(n: usize) -> SymCsrMatrix {
+    fn tridiag(n: usize) -> SymCsrMatrix<f64> {
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n       { coo.add(i, i,      2.0); }
         for i in 0..(n - 1) { coo.add(i, i + 1, -1.0); }

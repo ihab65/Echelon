@@ -18,7 +18,7 @@ fn test_from_mtx_general() {
     writeln!(file, "2 2 20.0").unwrap();
     writeln!(file, "3 3 30.0").unwrap();
 
-    let builder = CooBuilder::from_mtx(file.path()).unwrap();
+    let builder = CooBuilder::<f64>::from_mtx(file.path()).unwrap();
     let csr = builder.build_csr().unwrap();
 
     assert_eq!(csr.nrows(), 3);
@@ -39,7 +39,7 @@ fn test_from_mtx_symmetric_normalization() {
     writeln!(file, "2 1 0.5").unwrap(); // (row 2, col 1) -> should become (0, 1)
     writeln!(file, "2 2 2.0").unwrap();
 
-    let builder = CooBuilder::from_mtx(file.path()).unwrap();
+    let builder = CooBuilder::<f64>::from_mtx(file.path()).unwrap();
     
     // build_sym requires upper triangle invariants (j >= i)
     let sym = builder.build_sym().expect("Should normalize lower triangle to upper");
@@ -53,7 +53,7 @@ fn test_from_mtx_symmetric_normalization() {
 #[cfg(feature = "io")]
 #[test]
 fn test_sym_round_trip() {
-    let mut coo = CooBuilder::new(2, 2);
+    let mut coo = CooBuilder::<f64>::new(2, 2);
     coo.add(0, 0, 4.0);
     coo.add(0, 1, 1.0);
     coo.add(1, 1, 4.0);

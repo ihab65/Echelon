@@ -4,7 +4,7 @@ pub mod solve;
 
 use crate::error::{SolverError, Result};
 use crate::ordering::{Ordering, Permutation};
-use sparse::SymCsrMatrix;
+use sparse::{SparseScalar, SymCsrMatrix};
 use sparse::convert::sym_to_csc;
 
 /// Sparse Cholesky solver for symmetric positive definite systems `Ku = f`.
@@ -40,24 +40,24 @@ use sparse::convert::sym_to_csc;
 /// ```
 /// # use solvers::cholesky::SparseSolver;
 /// # use solvers::ordering::Ordering;
-/// let mut solver = SparseSolver::new();
+/// let mut solver: SparseSolver<f64> = SparseSolver::new();
 /// solver.set_ordering(Ordering::Amd);   // better for irregular meshes
 /// solver.set_ordering(Ordering::Rcm);   // better for regular grids
 /// solver.set_ordering(Ordering::Natural); // no reordering
 /// ```
 ///
 /// [`set_ordering`]: SparseSolver::set_ordering
-pub struct SparseSolver {
+pub struct SparseSolver<T: SparseScalar> {
     /// Ordering strategy to use in the next `analyze` call.
     ordering: Ordering,
     /// Computed permutation -- stored so `factorize` can re-permute K and
     /// `solve` can unpermute the solution without re-running the ordering.
     perm:     Option<Permutation>,
     symbolic: Option<symbolic::SymbolicCholesky>,
-    numeric:  Option<numeric::NumericCholesky>,
+    numeric:  Option<numeric::NumericCholesky<T>>,
 }
 
-impl SparseSolver {
+impl<T: SparseScalar> SparseSolver<T> {
     /// Create a new solver with the default ordering ([`Ordering::Rcm`]).
     /// No allocations occur until `analyze` is called.
     pub fn new() -> Self {
@@ -78,7 +78,7 @@ impl SparseSolver {
     /// ```
     /// # use solvers::cholesky::SparseSolver;
     /// # use solvers::ordering::Ordering;
-    /// let mut solver = SparseSolver::new();
+    /// let mut solver: SparseSolver<f64> = SparseSolver::new();
     ///
     /// // Use AMD for irregular meshes and frame structures
     /// solver.set_ordering(Ordering::Amd);
@@ -111,7 +111,9 @@ impl SparseSolver {
     ///
     /// # Errors
     /// - Propagates any [`SolverError`] from the symbolic phase.
-    pub fn analyze(&mut self, k: &SymCsrMatrix) -> Result<()> {
+    pub fn analyze(&mut self, k: &SymCsrMatrix<T>) -> Result<()> 
+        where T: SparseScalar
+    {
         // 1. Compute permutation from the chosen ordering strategy.
         let perm = self.ordering.clone().into_permutation(k);
 
@@ -139,7 +141,9 @@ impl SparseSolver {
     /// # Errors
     /// - [`SolverError::NotAnalyzed`] if `analyze` has not been called.
     /// - [`SolverError::NotPositiveDefinite`] if `K` is not SPD.
-    pub fn factorize(&mut self, k: &SymCsrMatrix) -> Result<()> {
+    pub fn factorize(&mut self, k: &SymCsrMatrix<T>) -> Result<()> 
+        where T: SparseScalar
+    {
         let perm = self.perm.as_ref().ok_or(SolverError::NotAnalyzed)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
 
@@ -160,7 +164,7 @@ impl SparseSolver {
     /// # Errors
     /// - [`SolverError::NotFactorized`] if `factorize` has not been called.
     /// - [`SolverError::RhsSizeMismatch`] if `f.len() != K.n` or `u.len() != K.n`.
-    pub fn solve(&self, f: &[f64], u: &mut [f64]) -> Result<()> {
+    pub fn solve(&self, f: &[T], u: &mut [T]) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotFactorized)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;
         let num  = self.numeric.as_ref().ok_or(SolverError::NotFactorized)?;
@@ -168,13 +172,15 @@ impl SparseSolver {
     }
 
     /// Convenience: analyze + factorize in one call.
-    pub fn analyze_and_factorize(&mut self, k: &SymCsrMatrix) -> Result<()> {
+    pub fn analyze_and_factorize(&mut self, k: &SymCsrMatrix<T>) -> Result<()> 
+        where T: SparseScalar
+    {
         self.analyze(k)?;
         self.factorize(k)
     }
 }
 
-impl Default for SparseSolver {
+impl<T: SparseScalar> Default for SparseSolver<T> {
     fn default() -> Self { Self::new() }
 }
 
@@ -187,14 +193,14 @@ mod tests {
     use super::*;
     use sparse::CooBuilder;
 
-    fn tridiag(n: usize) -> SymCsrMatrix {
+    fn tridiag(n: usize) -> SymCsrMatrix<f64> {
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n       { coo.add(i, i,      2.0); }
         for i in 0..(n - 1) { coo.add(i, i + 1, -1.0); }
         coo.build_sym().unwrap()
     }
 
-    fn check_residual(k: &SymCsrMatrix, f: &[f64], u: &[f64]) {
+    fn check_residual(k: &SymCsrMatrix<f64>, f: &[f64], u: &[f64]) {
         let ku = k.matvec(u).unwrap();
         for (i, (&kui, &fi)) in ku.iter().zip(f.iter()).enumerate() {
             assert!(
@@ -211,7 +217,7 @@ mod tests {
         let k = tridiag(3);
         let f = vec![1.0, 0.0, 1.0];
         let mut u = vec![0.0; 3];
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         solver.analyze(&k).unwrap();
         solver.factorize(&k).unwrap();
         solver.solve(&f, &mut u).unwrap();
@@ -223,7 +229,7 @@ mod tests {
         let k = tridiag(5);
         let f = vec![1.0; 5];
         let mut u = vec![0.0; 5];
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         solver.analyze_and_factorize(&k).unwrap();
         solver.solve(&f, &mut u).unwrap();
         check_residual(&k, &f, &u);
@@ -240,7 +246,7 @@ mod tests {
         let k2 = coo2.build_sym().unwrap();
 
         let f = vec![1.0; 4];
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         solver.analyze(&k1).unwrap();
 
         let mut u1 = vec![0.0; 4];
@@ -259,7 +265,7 @@ mod tests {
         let k = tridiag(50);
         let f: Vec<f64> = (1..=50).map(|i| i as f64).collect();
         let mut u = vec![0.0; 50];
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         solver.analyze_and_factorize(&k).unwrap();
         solver.solve(&f, &mut u).unwrap();
         check_residual(&k, &f, &u);
@@ -270,7 +276,7 @@ mod tests {
     #[test]
     fn factorize_before_analyze_errors() {
         let k = tridiag(3);
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         assert!(matches!(
             solver.factorize(&k).unwrap_err(),
             SolverError::NotAnalyzed
@@ -280,7 +286,7 @@ mod tests {
     #[test]
     fn solve_before_factorize_errors() {
         let k = tridiag(3);
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         solver.analyze(&k).unwrap();
         let mut u = vec![0.0; 3];
         assert!(matches!(
@@ -291,7 +297,7 @@ mod tests {
 
     #[test]
     fn solve_before_analyze_errors() {
-        let solver = SparseSolver::new();
+        let solver: SparseSolver<f64> = SparseSolver::new();
         let mut u = vec![0.0; 3];
         assert!(matches!(
             solver.solve(&[1.0, 0.0, 0.0], &mut u).unwrap_err(),
@@ -302,7 +308,7 @@ mod tests {
     #[test]
     fn analyze_invalidates_previous_numeric() {
         let k = tridiag(3);
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         solver.analyze_and_factorize(&k).unwrap();
         // Re-analyze should clear the numeric factor
         solver.analyze(&k).unwrap();
@@ -318,7 +324,7 @@ mod tests {
         coo.add(0, 0, -4.0); // not PD
         coo.add(1, 1,  4.0);
         let k = coo.build_sym().unwrap();
-        let mut solver = SparseSolver::new();
+        let mut solver: SparseSolver<f64> = SparseSolver::new();
         solver.analyze(&k).unwrap();
         assert!(matches!(
             solver.factorize(&k).unwrap_err(),

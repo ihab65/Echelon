@@ -33,7 +33,7 @@
 
 use crate::error::{SolverError, Result};
 use super::symbolic::SymbolicCholesky;
-use sparse::CscMatrix;
+use sparse::{CscMatrix, SparseScalar};
 
 // -----------------------------------------------------------------
 // Public type
@@ -45,10 +45,10 @@ use sparse::CscMatrix;
 /// [`SymbolicCholesky`]; `NumericCholesky` stores only the `f64` values.
 /// Both are required together to perform the triangular solve.
 #[derive(Debug)]
-pub struct NumericCholesky {
+pub struct NumericCholesky<T: SparseScalar> {
     /// Non-zero values of `L`, indexed identically to `SymbolicCholesky::row_idx`.
     /// `values[col_ptr[j]..col_ptr[j+1]]` are the entries of column `j`.
-    pub values: Vec<f64>,
+    pub values: Vec<T>,
     /// Dimension of the factored system.
     pub n: usize,
 }
@@ -66,13 +66,15 @@ pub struct NumericCholesky {
 ///
 /// # Errors
 /// - [`SolverError::NotPositiveDefinite`] if the matrix is not SPD.
-pub fn factorize(k_csc: &CscMatrix, sym: &SymbolicCholesky) -> Result<NumericCholesky> {
+pub fn factorize<T>(k_csc: &CscMatrix<T>, sym: &SymbolicCholesky) -> Result<NumericCholesky<T>> 
+    where T: SparseScalar
+{
     let n = sym.n;
     debug_assert_eq!(k_csc.nrows, n);
     debug_assert_eq!(k_csc.ncols, n);
 
     let nnz_l = sym.nnz_l();
-    let mut lv = vec![0.0_f64; nnz_l];
+    let mut lv = vec![T::zero(); nnz_l];
 
     // Build children lists from the elimination tree.
     let mut children = vec![Vec::new(); n];
@@ -88,7 +90,7 @@ pub fn factorize(k_csc: &CscMatrix, sym: &SymbolicCholesky) -> Result<NumericCho
 
     // Dense workspace.  `active[i]` is true iff w[i] has been written this
     // column.  We track touched indices so we can clear both in O(touched).
-    let mut w = vec![0.0_f64; n];
+    let mut w = vec![T::zero(); n];
     let mut active = vec![false; n];
     let mut touched: Vec<usize> = Vec::with_capacity(64);
 
@@ -163,15 +165,15 @@ pub fn factorize(k_csc: &CscMatrix, sym: &SymbolicCholesky) -> Result<NumericCho
         // ------------------------------------------------------------------
         let wj = w[j];
         // Use a small tolerance to detect numerical zero (e.g., for singular matrices).
-        if wj <= 1e-12 {
+        if wj.real_part() <= 1e-12 {
             // Clean workspace before returning the error.
             for &r in &touched {
-                w[r] = 0.0;
+                w[r] = T::zero();
                 active[r] = false;
             }
-            return Err(SolverError::NotPositiveDefinite { index: j, value: wj });
+            return Err(SolverError::NotPositiveDefinite { index: j, value: wj.real_part() });
         }
-        let ljj = wj.sqrt();
+        let ljj = wj.scalar_sqrt();
 
         // The diagonal is always the first entry in each L column.
         let l_col_start = sym.col_ptr[j];
@@ -194,7 +196,7 @@ pub fn factorize(k_csc: &CscMatrix, sym: &SymbolicCholesky) -> Result<NumericCho
         // Step 5 — clear workspace.
         // ------------------------------------------------------------------
         for &r in &touched {
-            w[r] = 0.0;
+            w[r] = T::zero();
             active[r] = false;
         }
     }
@@ -217,28 +219,28 @@ mod tests {
 
     /// Factorize a `SymCsrMatrix` directly (no RCM — unit test of numeric
     /// routine in isolation).
-    fn factorize_direct(k: &SymCsrMatrix) -> (SymbolicCholesky, NumericCholesky) {
+    fn factorize_direct(k: &SymCsrMatrix<f64>) -> (SymbolicCholesky, NumericCholesky<f64>) {
         let csc = sym_to_csc(k);
         let sym = analyze(&csc).unwrap();
         let num = factorize(&csc, &sym).unwrap();
         (sym, num)
     }
 
-    fn tridiag(n: usize) -> SymCsrMatrix {
+    fn tridiag(n: usize) -> SymCsrMatrix<f64> {
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n       { coo.add(i, i,      2.0); }
         for i in 0..(n - 1) { coo.add(i, i + 1, -1.0); }
         coo.build_sym().unwrap()
     }
 
-    fn diagonal_mat(vals: &[f64]) -> SymCsrMatrix {
+    fn diagonal_mat(vals: &[f64]) -> SymCsrMatrix<f64> {
         let n = vals.len();
         let mut coo = CooBuilder::new(n, n);
         for (i, &v) in vals.iter().enumerate() { coo.add(i, i, v); }
         coo.build_sym().unwrap()
     }
 
-    fn dense_spd_3() -> SymCsrMatrix {
+    fn dense_spd_3() -> SymCsrMatrix<f64> {
         // K = [[4,1,1],[1,4,1],[1,1,4]] — strictly diagonally dominant → SPD
         let mut coo = CooBuilder::new(3, 3);
         coo.add(0, 0, 4.0); coo.add(0, 1, 1.0); coo.add(0, 2, 1.0);
@@ -252,7 +254,7 @@ mod tests {
     // The gold-standard check: reconstruct K' = LLᵀ in dense form and
     // compare with K entry-by-entry.
 
-    fn check_llt(k: &SymCsrMatrix) {
+    fn check_llt(k: &SymCsrMatrix<f64>) {
         let (sym, num) = factorize_direct(k);
         let n = sym.n;
 

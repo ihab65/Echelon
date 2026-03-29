@@ -41,7 +41,7 @@ use solvers::SolverError;
 ///
 /// This is the standard FEM stiffness for a 1-D bar with `n` free DOFs and
 /// pin BCs already applied at both ends.
-fn spring_chain(n: usize, k_spring: f64) -> SymCsrMatrix {
+fn spring_chain(n: usize, k_spring: f64) -> SymCsrMatrix<f64> {
     assert!(n >= 2, "spring chain needs at least 2 nodes");
     let mut coo = CooBuilder::new(n, n);
     for i in 0..n {
@@ -61,7 +61,7 @@ fn spring_chain(n: usize, k_spring: f64) -> SymCsrMatrix {
 ///
 /// Diagonal = 4.0, off-diagonal neighbours = -1.0.
 /// This is SPD for all `nx, ny ≥ 1`.
-fn laplacian_2d(nx: usize, ny: usize) -> SymCsrMatrix {
+fn laplacian_2d(nx: usize, ny: usize) -> SymCsrMatrix<f64> {
     assert!(nx >= 1 && ny >= 1);
     let n = nx * ny;
     let mut coo = CooBuilder::new(n, n);
@@ -90,7 +90,7 @@ fn laplacian_2d(nx: usize, ny: usize) -> SymCsrMatrix {
 ///
 /// Uses `SymCsrMatrix::matvec` which expands the implicit symmetry, so this
 /// works correctly even though `A` only stores the upper triangle.
-fn relative_residual(a: &SymCsrMatrix, f: &[f64], u: &[f64]) -> f64 {
+fn relative_residual(a: &SymCsrMatrix<f64>, f: &[f64], u: &[f64]) -> f64 {
     let au   = a.matvec(u).unwrap();
     let norm_f: f64 = f.iter().map(|x| x.abs()).fold(0.0_f64, f64::max);
     let norm_f = norm_f.max(1e-300); // avoid division by zero
@@ -102,7 +102,7 @@ fn relative_residual(a: &SymCsrMatrix, f: &[f64], u: &[f64]) -> f64 {
 }
 
 /// Solve `Au = f` with the full `SparseSolver` pipeline and return `u`.
-fn full_solve(a: &SymCsrMatrix, f: &[f64]) -> Vec<f64> {
+fn full_solve(a: &SymCsrMatrix<f64>, f: &[f64]) -> Vec<f64> {
     let mut solver = SparseSolver::new();
     solver.analyze_and_factorize(a).unwrap();
     let mut u = vec![0.0_f64; f.len()];
@@ -388,7 +388,7 @@ fn b7_laplacian_rcm_helps_on_badly_ordered_mesh() {
 
     // ── Helper: bandwidth of a SymCsrMatrix (upper triangle only, but
     //    symmetric so max |col - row| over stored entries suffices) ──────────
-    fn bandwidth(k: &SymCsrMatrix) -> usize {
+    fn bandwidth(k: &SymCsrMatrix<f64>) -> usize {
         let mut bw = 0_usize;
         for row in 0..k.n {
             for &col in &k.col_idx()[k.row_ptr()[row]..k.row_ptr()[row + 1]] {
@@ -484,7 +484,7 @@ fn b7_laplacian_rcm_helps_on_badly_ordered_mesh() {
 /// 1. It is trivially SPD with known condition number.
 /// 2. It avoids the dense-matrix overhead of a full random product.
 /// 3. It still tests the solver under extreme scaling.
-fn ill_conditioned_diagonal(n: usize, scale_lo: f64, scale_hi: f64) -> SymCsrMatrix {
+fn ill_conditioned_diagonal(n: usize, scale_lo: f64, scale_hi: f64) -> SymCsrMatrix<f64> {
     assert!(scale_hi >= scale_lo && scale_lo > 0.0);
     let eps = 1e-3 * scale_lo * scale_lo;
 
@@ -510,7 +510,7 @@ fn ill_conditioned_diagonal(n: usize, scale_lo: f64, scale_hi: f64) -> SymCsrMat
 /// ```
 ///
 /// The matrix is diagonally dominant by construction → guaranteed SPD.
-fn mixed_stiffness_tridiag(n: usize) -> SymCsrMatrix {
+fn mixed_stiffness_tridiag(n: usize) -> SymCsrMatrix<f64> {
     let mut scales = vec![0.0_f64; n];
     // First half: "stiff" (scale ~ 1e6), second half: "flexible" (scale ~ 1.0)
     for i in 0..n {

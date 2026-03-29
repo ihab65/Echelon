@@ -1,5 +1,8 @@
 use crate::error::{SparseError, Result};
 use crate::csr::CsrMatrix;
+use crate::SparseScalar;
+use std::iter::Sum;
+use std::ops::AddAssign;
 
 // -----------------------------------------------------------------
 // Pre-allocated workspace
@@ -14,24 +17,24 @@ use crate::csr::CsrMatrix;
 /// let mut ws = MatvecWorkspace::new(k.nrows);
 /// k.matvec_into(&[1.0, 0.0], &mut ws).unwrap();
 /// ```
-pub struct MatvecWorkspace {
-    pub(crate) buffer: Vec<f64>,
+pub struct MatvecWorkspace<T> {
+    pub(crate) buffer: Vec<T>,
 }
 
-impl MatvecWorkspace {
+impl<T: SparseScalar> MatvecWorkspace<T> {
     /// Allocate a workspace for a matrix with `n` rows.
     pub fn new(n: usize) -> Self {
-        Self { buffer: vec![0.0; n] }
+        Self { buffer: vec![T::zero(); n] }
     }
 
     /// Resize in-place (avoids reallocation when model size is unchanged).
     pub fn resize(&mut self, n: usize) {
-        self.buffer.resize(n, 0.0);
+        self.buffer.resize(n, T::zero());
     }
 
     /// Read the result after a `matvec_into` call.
     #[inline]
-    pub fn as_slice(&self) -> &[f64] {
+    pub fn as_slice(&self) -> &[T] {
         &self.buffer
     }
 }
@@ -40,7 +43,7 @@ impl MatvecWorkspace {
 // Matrix-vector products
 // -----------------------------------------------------------------
 
-impl CsrMatrix {
+impl<T: SparseScalar + Sum + AddAssign> CsrMatrix<T> {
     /// Compute `y = A * x`, writing into `ws` with **no heap allocation**.
     ///
     /// Preferred over [`matvec`] in any hot path.
@@ -48,7 +51,7 @@ impl CsrMatrix {
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `x.len() != ncols` or
     ///   `ws.buffer.len() != nrows`
-    pub fn matvec_into(&self, x: &[f64], ws: &mut MatvecWorkspace) -> Result<()> {
+    pub fn matvec_into(&self, x: &[T], ws: &mut MatvecWorkspace<T>) -> Result<()> {
         if x.len() != self.ncols {
             return Err(SparseError::DimensionMismatch {
                 expected: self.ncols, got: x.len(),
@@ -59,12 +62,12 @@ impl CsrMatrix {
                 expected: self.nrows, got: ws.buffer.len(),
             });
         }
-        ws.buffer.fill(0.0);
+        ws.buffer.fill(T::zero());
         for row in 0..self.nrows {
             let start = self.row_ptr[row];
             let end   = self.row_ptr[row + 1];
             // accumulate into a register — one write to ws.buffer per row
-            let acc: f64 = self.col_idx[start..end]
+            let acc: T = self.col_idx[start..end]
                 .iter()
                 .zip(&self.values[start..end])
                 .map(|(&col, &val)| val * x[col])
@@ -80,7 +83,7 @@ impl CsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `x.len() != ncols`
-    pub fn matvec(&self, x: &[f64]) -> Result<Vec<f64>> {
+    pub fn matvec(&self, x: &[T]) -> Result<Vec<T>> {
         let mut ws = MatvecWorkspace::new(self.nrows);
         self.matvec_into(x, &mut ws)?;
         Ok(ws.buffer)
@@ -90,7 +93,7 @@ impl CsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if sizes don't match
-    pub fn matvec_transpose_into(&self, x: &[f64], ws: &mut MatvecWorkspace) -> Result<()> {
+    pub fn matvec_transpose_into(&self, x: &[T], ws: &mut MatvecWorkspace<T>) -> Result<()> {
         if x.len() != self.nrows {
             return Err(SparseError::DimensionMismatch {
                 expected: self.nrows, got: x.len(),
@@ -101,7 +104,7 @@ impl CsrMatrix {
                 expected: self.ncols, got: ws.buffer.len(),
             });
         }
-        ws.buffer.fill(0.0);
+        ws.buffer.fill(T::zero());
         for row in 0..self.nrows {
             let start = self.row_ptr[row];
             let end   = self.row_ptr[row + 1];
@@ -117,7 +120,7 @@ impl CsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `x.len() != nrows`
-    pub fn matvec_transpose(&self, x: &[f64]) -> Result<Vec<f64>> {
+    pub fn matvec_transpose(&self, x: &[T]) -> Result<Vec<T>> {
         let mut ws = MatvecWorkspace::new(self.ncols);
         self.matvec_transpose_into(x, &mut ws)?;
         Ok(ws.buffer)
@@ -128,26 +131,26 @@ impl CsrMatrix {
     // -----------------------------------------------------------------
 
     /// Scale every stored value by `alpha` in place.
-    pub fn scale(&mut self, alpha: f64) {
+    pub fn scale(&mut self, alpha: T) {
         self.values.iter_mut().for_each(|v| *v *= alpha);
     }
 
     /// Frobenius norm: `sqrt(Σ aᵢⱼ²)` over structurally non-zero entries.
-    pub fn frobenius_norm(&self) -> f64 {
-        self.values.iter().map(|&v| v * v).sum::<f64>().sqrt()
+    pub fn frobenius_norm(&self) -> T {
+        self.values.iter().map(|&v| v * v).sum::<T>().scalar_sqrt()
     }
 
     /// Return `true` if `|K[i,j] - K[j,i]| ≤ tol` for every stored entry.
     ///
     /// # Errors
     /// - [`SparseError::NotSquare`]
-    pub fn is_symmetric(&self, tol: f64) -> Result<bool> {
+    pub fn is_symmetric(&self, tol: T) -> Result<bool> {
         if self.nrows != self.ncols {
             return Err(SparseError::NotSquare { nrows: self.nrows, ncols: self.ncols });
         }
         for (row, col, val) in self.iter_nonzeros() {
-            let mirror = self.find_idx(col, row).map_or(0.0, |i| self.values[i]);
-            if (val - mirror).abs() > tol {
+            let mirror = self.find_idx(col, row).map_or(T::zero(), |i| self.values[i]);
+            if (val - mirror).abs().real_part() > tol.real_part() {
                 return Ok(false);
             }
         }
@@ -159,7 +162,7 @@ impl CsrMatrix {
 mod tests {
     use super::*;
 
-    fn upper() -> CsrMatrix {
+    fn upper() -> CsrMatrix<f64> {
         let pattern = vec![vec![0usize, 2], vec![1, 2], vec![2]];
         let mut m = CsrMatrix::from_pattern(3, 3, &pattern).unwrap();
         m.add_value(0, 0, 1.0).unwrap();
@@ -170,7 +173,7 @@ mod tests {
         m
     }
 
-    fn sym() -> CsrMatrix {
+    fn sym() -> CsrMatrix<f64> {
         let pattern = vec![vec![0usize,1], vec![0,1,2], vec![1,2]];
         let mut m = CsrMatrix::from_pattern(3, 3, &pattern).unwrap();
         m.set_value(0, 0,  4.0).unwrap(); m.set_value(0, 1, -1.0).unwrap();

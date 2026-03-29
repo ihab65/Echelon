@@ -1,6 +1,6 @@
 use std::fmt;
 use crate::error::{SparseError, Result};
-use crate::SparseMatrix;
+use crate::{SparseMatrix, SparseScalar};
 
 /// Symmetric Compressed Sparse Row matrix — upper triangle storage only.
 ///
@@ -19,8 +19,8 @@ use crate::SparseMatrix;
 /// - the diagonal entry for every row is **always present** in the pattern
 ///   (required by Cholesky; enforced in `from_pattern`)
 #[derive(Debug, Clone, PartialEq)]
-pub struct SymCsrMatrix {
-    pub(crate) values:  Vec<f64>,
+pub struct SymCsrMatrix<T: SparseScalar> {
+    pub(crate) values:  Vec<T>,
     pub(crate) col_idx: Vec<usize>,
     pub(crate) row_ptr: Vec<usize>,
     /// Dimension of the square matrix.
@@ -31,7 +31,7 @@ pub struct SymCsrMatrix {
 // SparseMatrix trait
 // -----------------------------------------------------------------
 
-impl SparseMatrix for SymCsrMatrix {
+impl<T: SparseScalar> SparseMatrix for SymCsrMatrix<T> {
     #[inline] fn nrows(&self)  -> usize { self.n }
     #[inline] fn ncols(&self)  -> usize { self.n }
     #[inline] fn nnz(&self)    -> usize { self.nnz() }
@@ -42,7 +42,7 @@ impl SparseMatrix for SymCsrMatrix {
 // Construction
 // -----------------------------------------------------------------
 
-impl SymCsrMatrix {
+impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Build a zero-valued symmetric CSR matrix from an upper-triangle pattern.
     ///
     /// `pattern[i]` must only contain column indices `j >= i` (on or above
@@ -114,7 +114,7 @@ impl SymCsrMatrix {
         }
 
         let nnz = col_idx.len();
-        Ok(Self { values: vec![0.0; nnz], col_idx, row_ptr, n })
+        Ok(Self { values: vec![T::zero(); nnz], col_idx, row_ptr, n })
     }
 
     /// Build the upper-triangle pattern from element DOF connectivity.
@@ -163,7 +163,7 @@ impl SymCsrMatrix {
 // Accessors
 // -----------------------------------------------------------------
 
-impl SymCsrMatrix {
+impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Number of stored entries (upper triangle + diagonal).
     ///
     /// The full (logically symmetric) matrix has
@@ -184,7 +184,7 @@ impl SymCsrMatrix {
 
     /// Raw values array.
     #[inline]
-    pub fn values(&self) -> &[f64] { &self.values }
+    pub fn values(&self) -> &[T] { &self.values }
 
     /// Value at `(row, col)` in the full symmetric matrix.
     ///
@@ -195,7 +195,7 @@ impl SymCsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
-    pub fn get(&self, row: usize, col: usize) -> Result<f64> {
+    pub fn get(&self, row: usize, col: usize) -> Result<T> {
         if row >= self.n {
             return Err(SparseError::RowOutOfRange { row, nrows: self.n });
         }
@@ -204,7 +204,7 @@ impl SymCsrMatrix {
         }
         // redirect to upper triangle
         let (r, c) = if col >= row { (row, col) } else { (col, row) };
-        Ok(self.find_idx(r, c).map_or(0.0, |i| self.values[i]))
+        Ok(self.find_idx(r, c).map_or(T::zero(), |i| self.values[i]))
     }
 }
 
@@ -212,14 +212,14 @@ impl SymCsrMatrix {
 // Mutation
 // -----------------------------------------------------------------
 
-impl SymCsrMatrix {
+impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Accumulate `val` into the upper-triangle entry `(row, col)`.
     ///
     /// # Errors
     /// - [`SparseError::LowerTriangleEntry`] if `col < row`
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
     /// - [`SparseError::IndexOutOfBounds`] if `(row, col)` is absent
-    pub fn add_value(&mut self, row: usize, col: usize, val: f64) -> Result<()> {
+    pub fn add_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_upper(row, col)?;
         let idx = self.find_idx(row, col)
             .ok_or(SparseError::IndexOutOfBounds { row, col })?;
@@ -231,7 +231,7 @@ impl SymCsrMatrix {
     ///
     /// # Errors
     /// Same as [`add_value`].
-    pub fn set_value(&mut self, row: usize, col: usize, val: f64) -> Result<()> {
+    pub fn set_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_upper(row, col)?;
         let idx = self.find_idx(row, col)
             .ok_or(SparseError::IndexOutOfBounds { row, col })?;
@@ -242,7 +242,7 @@ impl SymCsrMatrix {
     /// Set all stored values to `0.0` while keeping the pattern.
     #[inline]
     pub fn zero(&mut self) {
-        self.values.fill(0.0);
+        self.values.fill(T::zero());
     }
 
     /// Scatter the upper triangle of symmetric element stiffness `ke`
@@ -254,7 +254,7 @@ impl SymCsrMatrix {
     /// # Errors
     /// - [`SparseError::ScatterSizeMismatch`] if `ke.len() != n²`
     /// - [`SparseError::IndexOutOfBounds`] if a mapped position is absent
-    pub fn scatter_add(&mut self, ke: &[f64], dof_map: &[usize]) -> Result<()> {
+    pub fn scatter_add(&mut self, ke: &[T], dof_map: &[usize]) -> Result<()> {
         let n = dof_map.len();
         let expected = n * n;
         if ke.len() != expected {
@@ -280,7 +280,7 @@ impl SymCsrMatrix {
     ///
     /// Every row is guaranteed to have a diagonal entry (enforced at
     /// construction), so this never returns zeros for a valid matrix.
-    pub fn extract_diagonal(&self) -> Vec<f64> {
+    pub fn extract_diagonal(&self) -> Vec<T> {
         (0..self.n)
             .map(|i| {
                 // diagonal is always the first entry in each row (col >= row,
@@ -308,19 +308,19 @@ impl SymCsrMatrix {
         let start = self.row_ptr[dof];
         let end   = self.row_ptr[dof + 1];
         for idx in start..end {
-            self.values[idx] = 0.0;
+            self.values[idx] = T::zero();
         }
         // zero entries (row, dof) for rows above dof — these are in the
         // upper triangle because row < dof
         for row in 0..dof {
             if let Some(idx) = self.find_idx(row, dof) {
-                self.values[idx] = 0.0;
+                self.values[idx] = T::zero();
             }
         }
         // set diagonal to 1 (diagonal is always stored)
         let diag_idx = self.find_idx(dof, dof)
             .expect("diagonal invariant violated");
-        self.values[diag_idx] = 1.0;
+        self.values[diag_idx] = T::one();
         Ok(())
     }
 }
@@ -329,7 +329,7 @@ impl SymCsrMatrix {
 // Validation
 // -----------------------------------------------------------------
 
-impl SymCsrMatrix {
+impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Verify all internal invariants.
     pub fn validate(&self) -> Result<()> {
         if self.row_ptr.len() != self.n + 1 {
@@ -373,7 +373,7 @@ impl SymCsrMatrix {
 // Private helpers
 // -----------------------------------------------------------------
 
-impl SymCsrMatrix {
+impl<T: SparseScalar> SymCsrMatrix<T> {
     #[inline]
     pub(crate) fn find_idx(&self, row: usize, col: usize) -> Option<usize> {
         let start = self.row_ptr[row];
@@ -403,14 +403,14 @@ impl SymCsrMatrix {
 // Display
 // -----------------------------------------------------------------
 
-impl fmt::Display for SymCsrMatrix {
+impl<T: SparseScalar> fmt::Display for SymCsrMatrix<T> {
     /// Prints the full symmetric matrix (both triangles expanded).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for row in 0..self.n {
             write!(f, "[")?;
             for col in 0..self.n {
                 let (r, c) = if col >= row { (row, col) } else { (col, row) };
-                let val = self.find_idx(r, c).map_or(0.0, |i| self.values[i]);
+                let val = self.find_idx(r, c).map_or(T::zero(), |i| self.values[i]);
                 if col > 0 { write!(f, ", ")?; }
                 write!(f, "{val:8.4}")?;
             }
@@ -425,7 +425,7 @@ impl fmt::Display for SymCsrMatrix {
 // -----------------------------------------------------------------
 
 #[cfg(feature = "io")]
-impl SymCsrMatrix {
+impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Exports the symmetric matrix to a Matrix Market (.mtx) file.
     /// Only the stored upper triangle is written, with the 'symmetric' header.
     pub fn to_mtx<P: AsRef<std::path::Path>>(&self, path: P) -> crate::error::Result<()> {
@@ -467,7 +467,7 @@ mod tests {
     /// [ 4 -1  0]
     /// [-1  4 -1]
     /// [ 0 -1  4]
-    fn tridiag() -> SymCsrMatrix {
+    fn tridiag() -> SymCsrMatrix<f64> {
         // upper triangle: row0=[0,1], row1=[1,2], row2=[2]
         let pattern = vec![vec![0usize, 1], vec![1, 2], vec![2]];
         let mut m = SymCsrMatrix::from_pattern(3, &pattern).unwrap();
@@ -490,7 +490,7 @@ mod tests {
     fn from_pattern_inserts_diagonal_automatically() {
         // pattern missing diagonal for row 0 — should be inserted
         let pattern = vec![vec![1usize], vec![1]]; // row0 has only col1, row1 has only col1
-        let m = SymCsrMatrix::from_pattern(2, &pattern).unwrap();
+        let m = SymCsrMatrix::<f64>::from_pattern(2, &pattern).unwrap();
         // diagonal must now be present in both rows
         assert!(m.find_idx(0, 0).is_some());
         assert!(m.find_idx(1, 1).is_some());
@@ -501,7 +501,7 @@ mod tests {
         // col 0 < row 1 — lower triangle
         let pattern = vec![vec![0usize], vec![0usize, 1]];
         assert!(matches!(
-            SymCsrMatrix::from_pattern(2, &pattern).unwrap_err(),
+            SymCsrMatrix::<f64>::from_pattern(2, &pattern).unwrap_err(),
             SparseError::LowerTriangleEntry { row: 1, col: 0 }
         ));
     }
@@ -510,7 +510,7 @@ mod tests {
     fn from_pattern_err_col_out_of_range() {
         let pattern = vec![vec![0usize, 99]];
         assert!(matches!(
-            SymCsrMatrix::from_pattern(1, &pattern).unwrap_err(),
+            SymCsrMatrix::<f64>::from_pattern(1, &pattern).unwrap_err(),
             SparseError::ColOutOfRange { col: 99, .. }
         ));
     }

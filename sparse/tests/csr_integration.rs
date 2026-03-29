@@ -2,7 +2,7 @@
 
 use sparse::{CsrMatrix, SparseError, SparseMatrix, CooBuilder};
 
-fn spring_chain() -> CsrMatrix {
+fn spring_chain() -> CsrMatrix<f64> {
     // Three springs in series: fixed – u0 – u1 – fixed, k=1 each
     // K = [[2,-1],[-1,2]]
     let mut coo = CooBuilder::new(2, 2);

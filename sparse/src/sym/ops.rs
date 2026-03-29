@@ -1,8 +1,11 @@
 use crate::error::{SparseError, Result};
 use crate::sym::SymCsrMatrix;
 use crate::csr::ops::MatvecWorkspace;
+use crate::SparseScalar;
+use std::iter::Sum;
+use std::ops::AddAssign;
 
-impl SymCsrMatrix {
+impl<T :SparseScalar + Sum + AddAssign> SymCsrMatrix<T> {
     /// Compute `y = A * x` exploiting symmetry — **no heap allocation**.
     ///
     /// Because only the upper triangle is stored, each off-diagonal entry
@@ -13,7 +16,7 @@ impl SymCsrMatrix {
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `x.len() != n` or
     ///   `ws.buffer.len() != n`
-    pub fn matvec_into(&self, x: &[f64], ws: &mut MatvecWorkspace) -> Result<()> {
+    pub fn matvec_into(&self, x: &[T], ws: &mut MatvecWorkspace<T>) -> Result<()> {
         if x.len() != self.n {
             return Err(SparseError::DimensionMismatch {
                 expected: self.n, got: x.len(),
@@ -24,7 +27,7 @@ impl SymCsrMatrix {
                 expected: self.n, got: ws.buffer.len(),
             });
         }
-        ws.buffer.fill(0.0);
+        ws.buffer.fill(T::zero());
 
         for row in 0..self.n {
             let start = self.row_ptr[row];
@@ -49,7 +52,7 @@ impl SymCsrMatrix {
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `x.len() != n`
-    pub fn matvec(&self, x: &[f64]) -> Result<Vec<f64>> {
+    pub fn matvec(&self, x: &[T]) -> Result<Vec<T>> {
         let mut ws = MatvecWorkspace::new(self.n);
         self.matvec_into(x, &mut ws)?;
         Ok(ws.buffer)
@@ -60,15 +63,15 @@ impl SymCsrMatrix {
     /// Because each off-diagonal value is stored once but represents two
     /// entries in the full matrix, scaling by `alpha` correctly scales the
     /// full matrix — no double-counting needed.
-    pub fn scale(&mut self, alpha: f64) {
+    pub fn scale(&mut self, alpha: T) {
         self.values.iter_mut().for_each(|v| *v *= alpha);
     }
 
     /// Frobenius norm of the **full** symmetric matrix: `sqrt(Σ aᵢⱼ²)`.
     ///
     /// Off-diagonal stored entries are counted twice (upper and lower).
-    pub fn frobenius_norm(&self) -> f64 {
-        let mut sum_sq = 0.0_f64;
+    pub fn frobenius_norm(&self) -> T {
+        let mut sum_sq = T::zero();
         for row in 0..self.n {
             let start = self.row_ptr[row];
             let end   = self.row_ptr[row + 1];
@@ -78,11 +81,12 @@ impl SymCsrMatrix {
                 if col == row {
                     sum_sq += v * v;         // diagonal: once
                 } else {
-                    sum_sq += 2.0 * v * v;  // off-diagonal: upper + lower
+                    let two = T::one() + T::one();
+                    sum_sq += two * v * v;  // off-diagonal: upper + lower
                 }
             }
         }
-        sum_sq.sqrt()
+        sum_sq.scalar_sqrt()
     }
 }
 
@@ -90,7 +94,7 @@ impl SymCsrMatrix {
 mod tests {
     use super::*;
 
-    fn tridiag() -> SymCsrMatrix {
+    fn tridiag() -> SymCsrMatrix<f64> {
         // [ 4 -1  0]
         // [-1  4 -1]
         // [ 0 -1  4]

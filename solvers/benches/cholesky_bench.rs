@@ -13,7 +13,7 @@ use solvers::cholesky::SparseSolver;
 /// 1-D spring chain: tridiagonal SPD n×n matrix.
 /// Identical to the one in solver_stress.rs — duplicated here to keep
 /// the benchmark file self-contained without a shared helper crate.
-fn spring_chain(n: usize) -> SymCsrMatrix {
+fn spring_chain(n: usize) -> SymCsrMatrix<f64> {
     let mut coo = CooBuilder::new(n, n);
     for i in 0..n {
         let diag = if i == 0 || i == n - 1 { 1.0 } else { 2.0 };
@@ -26,7 +26,7 @@ fn spring_chain(n: usize) -> SymCsrMatrix {
 }
 
 /// 2-D grid Laplacian: 5-point stencil on an `nx × ny` interior grid.
-fn laplacian_2d(nx: usize, ny: usize) -> SymCsrMatrix {
+fn laplacian_2d(nx: usize, ny: usize) -> SymCsrMatrix<f64> {
     let n = nx * ny;
     let mut coo = CooBuilder::new(n, n);
     for iy in 0..ny {
@@ -51,12 +51,12 @@ fn rhs(n: usize) -> Vec<f64> {
 
 /// A fully analyzed + factorized solver, ready for `solve` benchmarks.
 struct ReadySolver {
-    solver: SparseSolver,
+    solver: SparseSolver<f64>,
     n:      usize,
 }
 
 impl ReadySolver {
-    fn new(k: &SymCsrMatrix) -> Self {
+    fn new(k: &SymCsrMatrix<f64>) -> Self {
         let mut solver = SparseSolver::new();
         solver.analyze_and_factorize(k).unwrap();
         Self { solver, n: k.n }

@@ -9,7 +9,7 @@
 //! construction and store the full (symmetric) adjacency so that
 //! neighbour queries are O(degree) with no extra work per call.
 
-use sparse::SymCsrMatrix;
+use sparse::{SparseScalar, SymCsrMatrix};
 
 /// Undirected sparse graph derived from the sparsity pattern of a
 /// symmetric matrix.
@@ -39,7 +39,7 @@ impl Graph {
     /// Only off-diagonal entries are treated as graph edges.
     /// Both directions `(i→j)` and `(j→i)` are recorded even though
     /// `SymCsrMatrix` stores only `i < j`.
-    pub fn from_sym(k: &SymCsrMatrix) -> Self {
+    pub fn from_sym<T>(k: &SymCsrMatrix<T>) -> Self where T: SparseScalar {
         let n = k.n;
 
         // Count neighbours per node — two passes to avoid reallocation.

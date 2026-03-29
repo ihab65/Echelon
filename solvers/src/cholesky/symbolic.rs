@@ -49,7 +49,7 @@
 //!   SIAM. Ch. 4.
 
 use crate::error::Result;
-use sparse::CscMatrix;
+use sparse::{CscMatrix, SparseScalar};
 
 // -----------------------------------------------------------------
 // Public types
@@ -100,7 +100,9 @@ impl SymbolicCholesky {
 /// The returned [`SymbolicCholesky`] should be cached and reused for
 /// every subsequent call to [`super::numeric::factorize`] as long as
 /// the topology (non-zero pattern) of `K` does not change.
-pub fn analyze(k_csc: &CscMatrix) -> Result<SymbolicCholesky> {
+pub fn analyze<T>(k_csc: &CscMatrix<T>) -> Result<SymbolicCholesky> 
+    where T: SparseScalar
+{
     let n = k_csc.ncols;
     let parent = elimination_tree(k_csc);
     let children = build_children(&parent, n);
@@ -122,7 +124,9 @@ pub fn analyze(k_csc: &CscMatrix) -> Result<SymbolicCholesky> {
 /// `ancestor[node]` is initialised to `node` itself (each node starts as
 /// its own root).  The loop terminates when `ancestor[r] == j` (we have
 /// reached j's component).
-fn elimination_tree(k_csc: &CscMatrix) -> Vec<usize> {
+fn elimination_tree<T>(k_csc: &CscMatrix<T>) -> Vec<usize> 
+    where T: SparseScalar
+{
     let n = k_csc.ncols;
     let mut parent   = vec![n; n];
     let mut ancestor = (0..n).collect::<Vec<_>>(); // ancestor[j] = j initially
@@ -184,11 +188,13 @@ fn build_children(parent: &[usize], n: usize) -> Vec<Vec<usize>> {
 /// 3. `pattern(L[:,j]) = {j} | reach[j]`.
 ///
 /// Returns `(col_ptr, row_idx)` with row indices sorted ascending per column.
-fn fill_pattern(
-    k_csc:    &CscMatrix,
+fn fill_pattern<T>(
+    k_csc:    &CscMatrix<T>,
     _parent:   &[usize],
     children: &[Vec<usize>],
-) -> (Vec<usize>, Vec<usize>) {
+) -> (Vec<usize>, Vec<usize>) 
+    where T: SparseScalar
+{
     let n = k_csc.ncols;
     let col_ptr_k = k_csc.col_ptr();
     let row_idx_k = k_csc.row_idx();
@@ -265,24 +271,24 @@ mod tests {
     use sparse::{CooBuilder, SymCsrMatrix};
     use sparse::convert::sym_to_csc;
 
-    fn to_csc(sym: &SymCsrMatrix) -> CscMatrix {
+    fn to_csc(sym: &SymCsrMatrix<f64>) -> CscMatrix<f64> {
         sym_to_csc(sym)
     }
 
-    fn tridiag(n: usize) -> SymCsrMatrix {
+    fn tridiag(n: usize) -> SymCsrMatrix<f64> {
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n       { coo.add(i, i,      2.0); }
         for i in 0..(n - 1) { coo.add(i, i + 1, -1.0); }
         coo.build_sym().unwrap()
     }
 
-    fn diagonal(n: usize) -> SymCsrMatrix {
+    fn diagonal(n: usize) -> SymCsrMatrix<f64> {
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n { coo.add(i, i, (i + 1) as f64); }
         coo.build_sym().unwrap()
     }
 
-    fn dense_3() -> SymCsrMatrix {
+    fn dense_3() -> SymCsrMatrix<f64> {
         let mut coo = CooBuilder::new(3, 3);
         coo.add(0, 0, 4.0); coo.add(0, 1, 1.0); coo.add(0, 2, 1.0);
         coo.add(1, 1, 4.0); coo.add(1, 2, 1.0);
@@ -292,7 +298,7 @@ mod tests {
 
     /// Star with hub as the LAST node (hub = n-1). Previously failed with
     /// the children-DFS approach; must also pass with the new algorithm.
-    fn star_hub_last(n: usize) -> SymCsrMatrix {
+    fn star_hub_last(n: usize) -> SymCsrMatrix<f64> {
         let hub = n - 1;
         let mut coo = CooBuilder::new(n, n);
         for i in 0..n   { coo.add(i, i, (n as f64) + 1.0); }
@@ -301,7 +307,7 @@ mod tests {
     }
 
     /// k x k grid Laplacian, row-major numbering.
-    fn grid_laplacian(k: usize) -> SymCsrMatrix {
+    fn grid_laplacian(k: usize) -> SymCsrMatrix<f64> {
         let n = k * k;
         let mut coo = CooBuilder::new(n, n);
         for r in 0..k {

@@ -47,19 +47,23 @@
 /// assert_eq!(s, &[1.0, 0.0, 0.0, 1.0]);
 /// ```
 #[inline]
-pub fn mat_as_slice<const N: usize>(m: &[[f64; N]; N]) -> &[f64] {
-    // SAFETY: [[f64; N]; N] is a contiguous block of N*N f64 values in
-    // row-major order (C layout).  The total size is N*N*size_of::<f64>().
+pub fn mat_as_slice<const N: usize, T>(m: &[[T; N]; N]) -> &[T] 
+    where T: sparse::SparseScalar
+{
+    // SAFETY: [[T; N]; N] is a contiguous block of N*N T values in
+    // row-major order (C layout).  The total size is N*N*size_of::<T>().
     // We produce a shared reference for the same lifetime as `m`.
     unsafe {
-        std::slice::from_raw_parts(m.as_ptr() as *const f64, N * N)
+        std::slice::from_raw_parts(m.as_ptr() as *const T, N * N)
     }
 }
 
 /// Return a zeroed `N×N` matrix.
 #[inline]
-pub fn mat_zero<const N: usize>() -> [[f64; N]; N] {
-    [[0.0; N]; N]
+pub fn mat_zero<const N: usize, T>() -> [[T; N]; N] 
+    where T: sparse::SparseScalar
+{
+    [[T::zero(); N]; N]
 }
 
 // -----------------------------------------------------------------
@@ -68,7 +72,9 @@ pub fn mat_zero<const N: usize>() -> [[f64; N]; N] {
 
 /// In-place `A += B`.
 #[inline]
-pub fn mat_add_assign<const N: usize>(a: &mut [[f64; N]; N], b: &[[f64; N]; N]) {
+pub fn mat_add_assign<const N: usize, T>(a: &mut [[T; N]; N], b: &[[T; N]; N]) 
+    where T: sparse::SparseScalar
+{
     for i in 0..N {
         for j in 0..N {
             a[i][j] += b[i][j];
@@ -91,12 +97,14 @@ pub fn mat_scale<const N: usize>(a: &mut [[f64; N]; N], s: f64) {
 /// For N = 4 (truss) or N = 6 (beam) this is only 64 or 216 multiply-adds,
 /// which the compiler fully unrolls and vectorises.
 #[inline]
-pub fn matmul<const N: usize>(a: &[[f64; N]; N], b: &[[f64; N]; N]) -> [[f64; N]; N] {
-    let mut c = mat_zero::<N>();
+pub fn matmul<const N: usize, T>(a: &[[T; N]; N], b: &[[T; N]; N]) -> [[T; N]; N] 
+    where T: sparse::SparseScalar
+{
+    let mut c = mat_zero::<N, T>();
     for i in 0..N {
         for k in 0..N {
             let aik = a[i][k];
-            if aik == 0.0 { continue; } // skip structural zeros in T
+            if aik == T::zero() { continue; } // skip structural zeros in T
             for j in 0..N {
                 c[i][j] += aik * b[k][j];
             }
@@ -110,12 +118,14 @@ pub fn matmul<const N: usize>(a: &[[f64; N]; N], b: &[[f64; N]; N]) -> [[f64; N]
 /// Equivalent to `matmul(&transpose(A), B)` but avoids materialising the
 /// transpose.  Used in the first step of `Tᵀ K T`.
 #[inline]
-pub fn mat_transpose_mul<const N: usize>(a: &[[f64; N]; N], b: &[[f64; N]; N]) -> [[f64; N]; N] {
-    let mut c = mat_zero::<N>();
+pub fn mat_transpose_mul<const N: usize, T>(a: &[[T; N]; N], b: &[[T; N]; N]) -> [[T; N]; N] 
+    where T: sparse::SparseScalar
+{
+    let mut c = mat_zero::<N, T>();
     for k in 0..N {  // k indexes columns of Aᵀ = rows of A
         for i in 0..N {
             let aki = a[k][i]; // Aᵀ[i,k] = A[k,i]
-            if aki == 0.0 { continue; }
+            if aki == T::zero() { continue; }
             for j in 0..N {
                 c[i][j] += aki * b[k][j];
             }
@@ -137,10 +147,12 @@ pub fn mat_transpose_mul<const N: usize>(a: &[[f64; N]; N], b: &[[f64; N]; N]) -
 /// ```
 /// Total: `2 N³` multiply-adds.  For N=6: 432 operations.
 #[inline]
-pub fn transform_stiffness<const N: usize>(
-    ke_local: &[[f64; N]; N],
-    t: &[[f64; N]; N],
-) -> [[f64; N]; N] {
+pub fn transform_stiffness<const N: usize, T>(
+    ke_local: &[[T; N]; N],
+    t: &[[T; N]; N],
+) -> [[T; N]; N] 
+    where T: sparse::SparseScalar
+{
     // step 1: W = Tᵀ * Ke_local
     let w = mat_transpose_mul(t, ke_local);
     // step 2: Kg = W * T
@@ -151,8 +163,10 @@ pub fn transform_stiffness<const N: usize>(
 ///
 /// Useful for building the full T from its components in tests.
 #[inline]
-pub fn transpose<const N: usize>(a: &[[f64; N]; N]) -> [[f64; N]; N] {
-    let mut b = mat_zero::<N>();
+pub fn transpose<const N: usize, T>(a: &[[T; N]; N]) -> [[T; N]; N] 
+    where T: sparse::SparseScalar
+{
+    let mut b = mat_zero::<N, T>();
     for i in 0..N {
         for j in 0..N {
             b[i][j] = a[j][i];
@@ -199,13 +213,13 @@ mod tests {
 
     #[test]
     fn mat_as_slice_4x4_length() {
-        let m = mat_zero::<4>();
+        let m = mat_zero::<4, f64>();
         assert_eq!(mat_as_slice(&m).len(), 16);
     }
 
     #[test]
     fn mat_as_slice_6x6_length() {
-        let m = mat_zero::<6>();
+        let m = mat_zero::<6, f64>();
         assert_eq!(mat_as_slice(&m).len(), 36);
     }
 

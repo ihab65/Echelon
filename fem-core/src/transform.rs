@@ -33,6 +33,8 @@
 //! Use [`CoordTransf2d::t_matrix_4x4`] which produces the 4×4 version
 //! for elements with 2 DOFs/node (no rotation DOF).
 
+use sparse::SparseScalar;
+
 use crate::dense::{transform_stiffness as dense_transform};
 
 /// Geometric properties of a 2D frame or truss element.
@@ -44,16 +46,16 @@ use crate::dense::{transform_stiffness as dense_transform};
 /// methods to update `cos` and `sin` from the current deformed configuration.
 /// That logic belongs in the `elements` crate, not here.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CoordTransf2d {
+pub struct CoordTransf2d<T: SparseScalar> {
     /// `cos θ = (x2 - x1) / L`
-    pub cos: f64,
+    pub cos: T,
     /// `sin θ = (y2 - y1) / L`
-    pub sin: f64,
+    pub sin: T,
     /// Element length `L = sqrt((x2-x1)² + (y2-y1)²)`
-    pub length: f64,
+    pub length: T,
 }
 
-impl CoordTransf2d {
+impl<T: SparseScalar> CoordTransf2d<T> {
     // -----------------------------------------------------------------
     // Construction
     // -----------------------------------------------------------------
@@ -63,12 +65,12 @@ impl CoordTransf2d {
     /// # Panics
     /// Panics in debug mode if the element has zero length
     /// (nodes are coincident).  In release mode the result is NaN.
-    pub fn from_nodes(x1: f64, y1: f64, x2: f64, y2: f64) -> Self {
+    pub fn from_nodes(x1: T, y1: T, x2: T, y2: T) -> Self {
         let dx = x2 - x1;
         let dy = y2 - y1;
-        let length = (dx * dx + dy * dy).sqrt();
+        let length = (dx * dx + dy * dy).scalar_sqrt();
         debug_assert!(
-            length > 0.0,
+            length.real_part() > 0.0,
             "CoordTransf2d: element has zero length (nodes are coincident)"
         );
         Self {
@@ -82,9 +84,9 @@ impl CoordTransf2d {
     ///
     /// Useful in tests or when the geometric properties are already computed.
     /// The caller is responsible for ensuring `cos² + sin² ≈ 1`.
-    pub fn from_cos_sin_length(cos: f64, sin: f64, length: f64) -> Self {
+    pub fn from_cos_sin_length(cos: T, sin: T, length: T) -> Self {
         debug_assert!(
-            (cos * cos + sin * sin - 1.0).abs() < 1e-10,
+            (cos * cos + sin * sin - T::one()).abs().real_part() < 1e-10,
             "CoordTransf2d: cos²+sin²={} ≠ 1",
             cos * cos + sin * sin
         );
@@ -105,13 +107,15 @@ impl CoordTransf2d {
     ///
     /// Maps global `[ux, uy, θ]` to local `[u_L, v_L, θ_L]`.
     #[inline]
-    pub fn rotation_3x3(&self) -> [[f64; 3]; 3] {
+    pub fn rotation_3x3(&self) -> [[T; 3]; 3] {
         let c = self.cos;
         let s = self.sin;
+        let o = T::zero();
+        let i = T::one();
         [
-            [ c,  s, 0.0],
-            [-s,  c, 0.0],
-            [0.0, 0.0, 1.0],
+            [ c,  s, o],
+            [-s,  c, o],
+            [o,  o, i],
         ]
     }
 
@@ -128,16 +132,19 @@ impl CoordTransf2d {
     ///
     /// Use this with [`transform_stiffness`](CoordTransf2d::transform_stiffness)
     /// to rotate `Ke_local` into global coordinates.
-    pub fn t_matrix_6x6(&self) -> [[f64; 6]; 6] {
+    pub fn t_matrix_6x6(&self) -> [[T; 6]; 6] {
         let c = self.cos;
         let s = self.sin;
+        let o = T::zero();
+        let i = T::one();
+
         [
-            [ c,  s, 0.0, 0.0, 0.0, 0.0],
-            [-s,  c, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0,  c,  s, 0.0],
-            [0.0, 0.0, 0.0, -s,  c, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+            [ c,  s, o, o, o, o],
+            [-s,  c, o, o, o, o],
+            [ o,  o, i, o, o, o],
+            [ o,  o, o, c, s, o],
+            [ o,  o, o,-s, c, o],
+            [ o,  o, o, o, o, i],
         ]
     }
 
@@ -155,7 +162,7 @@ impl CoordTransf2d {
     /// let ke_global = t.transform_stiffness_6x6(&ke_local);
     /// assert_eq!(ke_global, [[0.0; 6]; 6]);
     /// ```
-    pub fn transform_stiffness_6x6(&self, ke_local: &[[f64; 6]; 6]) -> [[f64; 6]; 6] {
+    pub fn transform_stiffness_6x6(&self, ke_local: &[[T; 6]; 6]) -> [[T; 6]; 6] {
         let t = self.t_matrix_6x6();
         dense_transform(ke_local, &t)
     }
@@ -172,21 +179,22 @@ impl CoordTransf2d {
     ///     [ 0   0   c   s ]
     ///     [ 0   0  -s   c ]
     /// ```
-    pub fn t_matrix_4x4(&self) -> [[f64; 4]; 4] {
+    pub fn t_matrix_4x4(&self) -> [[T; 4]; 4] {
         let c = self.cos;
         let s = self.sin;
+        let o = T::zero();
         [
-            [ c,  s, 0.0, 0.0],
-            [-s,  c, 0.0, 0.0],
-            [0.0, 0.0,  c,  s],
-            [0.0, 0.0, -s,  c],
+            [ c,  s, o, o],
+            [-s,  c, o, o],
+            [o, o,  c,  s],
+            [o, o, -s,  c],
         ]
     }
 
     /// Transform a 4×4 local stiffness to global coordinates.
     ///
     /// Computes `Kg = Tᵀ Ke_local T`.
-    pub fn transform_stiffness_4x4(&self, ke_local: &[[f64; 4]; 4]) -> [[f64; 4]; 4] {
+    pub fn transform_stiffness_4x4(&self, ke_local: &[[T; 4]; 4]) -> [[T; 4]; 4] {
         let t = self.t_matrix_4x4();
         dense_transform(ke_local, &t)
     }
@@ -198,7 +206,7 @@ impl CoordTransf2d {
     /// Element inclination angle in radians, in `[-π, π]`.
     #[inline]
     pub fn angle_rad(&self) -> f64 {
-        self.sin.atan2(self.cos)
+        self.sin.real_part().atan2(self.cos.real_part())
     }
 
     /// Element inclination angle in degrees.
@@ -248,17 +256,17 @@ mod tests {
     #[test]
     fn horizontal_element() {
         let t = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 0.0);
-        assert!((t.cos - 1.0).abs() < 1e-14);
-        assert!((t.sin - 0.0).abs() < 1e-14);
-        assert!((t.length - 3.0).abs() < 1e-14);
+        assert!((t.cos - 1.0).real_part().abs() < 1e-14);
+        assert!((t.sin - 0.0).real_part().abs() < 1e-14);
+        assert!((t.length - 3.0).real_part().abs() < 1e-14);
     }
 
     #[test]
     fn vertical_element() {
         let t = CoordTransf2d::from_nodes(0.0, 0.0, 0.0, 4.0);
-        assert!((t.cos - 0.0).abs() < 1e-14);
-        assert!((t.sin - 1.0).abs() < 1e-14);
-        assert!((t.length - 4.0).abs() < 1e-14);
+        assert!((t.cos - 0.0).real_part().abs() < 1e-14);
+        assert!((t.sin - 1.0).real_part().abs() < 1e-14);
+        assert!((t.length - 4.0).real_part().abs() < 1e-14);
     }
 
     #[test]
@@ -272,23 +280,23 @@ mod tests {
     #[test]
     fn angle_horizontal() {
         let t = CoordTransf2d::from_nodes(0.0, 0.0, 5.0, 0.0);
-        assert!((t.angle_rad() - 0.0).abs() < 1e-14);
-        assert!((t.angle_deg() - 0.0).abs() < 1e-14);
+        assert!((t.angle_rad() - 0.0).real_part().abs() < 1e-14);
+        assert!((t.angle_deg() - 0.0).real_part().abs() < 1e-14);
     }
 
     #[test]
     fn angle_45_degrees() {
         let t = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 1.0);
-        assert!((t.angle_deg() - 45.0).abs() < 1e-12);
+        assert!((t.angle_deg() - 45.0).real_part().abs() < 1e-12);
     }
 
     #[test]
     fn reversed_flips_direction() {
         let t = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0);
         let r = t.reversed();
-        assert!((r.cos + t.cos).abs() < 1e-14);
-        assert!((r.sin + t.sin).abs() < 1e-14);
-        assert!((r.length - t.length).abs() < 1e-14);
+        assert!((r.cos + t.cos).real_part().abs() < 1e-14);
+        assert!((r.sin + t.sin).real_part().abs() < 1e-14);
+        assert!((r.length - t.length).real_part().abs() < 1e-14);
     }
 
     // ---- 6×6 T matrix properties ----
@@ -300,7 +308,7 @@ mod tests {
         let tt = transpose(&t_mat);
         let product = matmul(&t_mat, &tt);
         let eye: [[f64; 6]; 6] = {
-            let mut m = mat_zero::<6>();
+            let mut m = mat_zero::<6, f64>();
             for i in 0..6 { m[i][i] = 1.0; }
             m
         };
@@ -311,7 +319,7 @@ mod tests {
     fn t6x6_horizontal_is_identity() {
         let t_mat = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 0.0).t_matrix_6x6();
         let eye: [[f64; 6]; 6] = {
-            let mut m = mat_zero::<6>();
+            let mut m = mat_zero::<6, f64>();
             for i in 0..6 { m[i][i] = 1.0; }
             m
         };
@@ -326,7 +334,7 @@ mod tests {
         let tt = transpose(&t_mat);
         let product = matmul(&t_mat, &tt);
         let eye: [[f64; 4]; 4] = {
-            let mut m = mat_zero::<4>();
+            let mut m = mat_zero::<4, f64>();
             for i in 0..4 { m[i][i] = 1.0; }
             m
         };
@@ -377,11 +385,11 @@ mod tests {
     fn rotation_3x3_preserves_rotation_dof() {
         // The θ DOF (index 2) should be unchanged by the rotation
         let r = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).rotation_3x3();
-        assert!((r[2][2] - 1.0).abs() < 1e-14);
-        assert!((r[0][2]).abs() < 1e-14);
-        assert!((r[1][2]).abs() < 1e-14);
-        assert!((r[2][0]).abs() < 1e-14);
-        assert!((r[2][1]).abs() < 1e-14);
+        assert!((r[2][2] - 1.0).real_part().abs() < 1e-14);
+        assert!((r[0][2]).real_part().abs() < 1e-14);
+        assert!((r[1][2]).real_part().abs() < 1e-14);
+        assert!((r[2][0]).real_part().abs() < 1e-14);
+        assert!((r[2][1]).real_part().abs() < 1e-14);
     }
 
     #[test]

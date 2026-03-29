@@ -1,15 +1,16 @@
 use crate::error::{SparseError, Result};
 use crate::csr::CsrMatrix;
+use crate::SparseScalar;
 
 /// Iterator over the non-zero `(col, value)` pairs of a single row,
 /// in ascending column order.
-pub struct RowIter<'a> {
+pub struct RowIter<'a, T: SparseScalar> {
     cols: &'a [usize],
-    vals: &'a [f64],
+    vals: &'a [T],
 }
 
-impl<'a> Iterator for RowIter<'a> {
-    type Item = (usize, f64);
+impl<'a, T: SparseScalar> Iterator for RowIter<'a, T> {
+    type Item = (usize, T);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -26,14 +27,14 @@ impl<'a> Iterator for RowIter<'a> {
     }
 }
 
-impl ExactSizeIterator for RowIter<'_> {}
+impl<T: SparseScalar> ExactSizeIterator for RowIter<'_, T> {}
 
-impl CsrMatrix {
+impl<T: SparseScalar> CsrMatrix<T> {
     /// Iterate over `(col, value)` pairs in `row`, in column order.
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] if `row >= nrows`
-    pub fn row_iter(&self, row: usize) -> Result<RowIter<'_>> {
+    pub fn row_iter(&self, row: usize) -> Result<RowIter<'_, T>> {
         if row >= self.nrows {
             return Err(SparseError::RowOutOfRange { row, nrows: self.nrows });
         }
@@ -47,7 +48,7 @@ impl CsrMatrix {
 
     /// Iterate over every structurally non-zero entry as `(row, col, value)`,
     /// in row-major order.
-    pub fn iter_nonzeros(&self) -> impl Iterator<Item = (usize, usize, f64)> + '_ {
+    pub fn iter_nonzeros(&self) -> impl Iterator<Item = (usize, usize, T)> + '_ {
         (0..self.nrows).flat_map(move |row| {
             let start = self.row_ptr[row];
             let end   = self.row_ptr[row + 1];
@@ -63,7 +64,7 @@ impl CsrMatrix {
 mod tests {
     use super::*;
 
-    fn sample() -> CsrMatrix {
+    fn sample() -> CsrMatrix<f64> {
         let pattern = vec![vec![0usize, 2], vec![1, 2], vec![2]];
         let mut m = CsrMatrix::from_pattern(3, 3, &pattern).unwrap();
         m.add_value(0, 0, 1.0).unwrap();
