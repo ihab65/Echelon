@@ -70,7 +70,7 @@ fn assert_rel(computed: f64, expected: f64, tol: f64, label: &str) {
 
 /// Check that the residual `‖Ku − f‖∞ / ‖f‖∞ < tol` for all DOFs.
 /// This is the gold-standard solver check independent of any analytical formula.
-fn check_residual(k_orig: &SymCsrMatrix, f: &[f64], u: &[f64], tol: f64) {
+fn check_residual(k_orig: &SymCsrMatrix<f64>, f: &[f64], u: &[f64], tol: f64) {
     let ku = k_orig.matvec(u).unwrap();
     let norm_f: f64 = f.iter().map(|x| x.abs()).fold(0.0_f64, f64::max).max(1e-15);
     for (i, (&kui, &fi)) in ku.iter().zip(f.iter()).enumerate() {
@@ -182,7 +182,7 @@ fn beam2d_ke_global(e: f64, a: f64, iz: f64,
 /// `element_node_lists` is a slice of node-index lists: one per element.
 /// `ndf` is DOFs per node.
 fn build_pattern(n_nodes: usize, ndf: usize,
-                 element_node_lists: &[Vec<NodeId>]) -> SymCsrMatrix {
+                 element_node_lists: &[Vec<NodeId>]) -> SymCsrMatrix<f64> {
     let n_dof = n_nodes * ndf;
     let element_dofs: Vec<Vec<usize>> = element_node_lists.iter()
         .map(|nodes| {
@@ -195,13 +195,13 @@ fn build_pattern(n_nodes: usize, ndf: usize,
 }
 
 /// Apply a pin boundary condition: zero row/col `dof` in `k`, zero `f[dof]`.
-fn apply_pin(k: &mut SymCsrMatrix, f: &mut Vec<f64>, dof: usize) {
+fn apply_pin(k: &mut SymCsrMatrix<f64>, f: &mut Vec<f64>, dof: usize) {
     k.zero_row_col(dof).unwrap();
     f[dof] = 0.0;
 }
 
 /// Solve `Ku = f` and return the solution vector.
-fn solve(k: &SymCsrMatrix, f: &[f64]) -> Vec<f64> {
+fn solve(k: &SymCsrMatrix<f64>, f: &[f64]) -> Vec<f64> {
     let mut solver = SparseSolver::new();
     solver.analyze_and_factorize(k).unwrap();
     let mut u = vec![0.0_f64; f.len()];
@@ -692,7 +692,7 @@ fn test_reanalysis_same_topology() {
     let nodes_ac = vec![NodeId(0), NodeId(1)];
     let nodes_cb = vec![NodeId(1), NodeId(2)];
 
-    let assemble = |iz: f64| -> (SymCsrMatrix, Vec<f64>) {
+    let assemble = |iz: f64| -> (SymCsrMatrix<f64>, Vec<f64>) {
         let mut k = build_pattern(3, ndf, &[nodes_ac.clone(), nodes_cb.clone()]);
         let ke_ac = beam2d_ke_global(e, a, iz, 0.0,   0.0, l/2.0, 0.0);
         let ke_cb = beam2d_ke_global(e, a, iz, l/2.0, 0.0, l,     0.0);
