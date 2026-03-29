@@ -365,36 +365,31 @@ mod tests {
     /// Badly-ordered graph (stride permutation): AMD must improve fill
     /// compared to the random ordering.
     #[test]
-    fn amd_reduces_fill_on_badly_ordered_path() {
-        let n = 101_usize;  // prime, so stride-3 is a bijection
-        let m_natural = tridiag(n);
+    fn amd_reduces_fill_on_badly_ordered_arrow_matrix() {
+        // Arrow matrix with hub at node 0 (worst position for Cholesky).
+        // Eliminating the hub first creates a clique among all n-1 neighbors
+        // → O(n²) fill. AMD moves the hub last → O(n) fill.
+        let n = 50_usize;
+        let mut coo = CooBuilder::new(n, n);
+        for i in 0..n     { coo.add(i, i, (n as f64) + 1.0); }
+        for i in 1..n     { coo.add(0, i, -1.0); }
+        let m = coo.build_sym().unwrap();
 
-        // Stride-3 permutation destroys locality
-        let bad_perm_vec: Vec<usize> = (0..n).map(|i| (i * 3) % n).collect();
-        let bad_perm = Permutation::new(bad_perm_vec).unwrap();
-        let m_bad = bad_perm.permute_sym(&m_natural).unwrap();
+        let nnz_natural = nnz_l(&m);
+        let nnz_opt     = 2 * n - 1; // hub-last gives bidiagonal L
 
-        let nnz_bad = nnz_l(&m_bad);
-        let nnz_opt = nnz_l(&m_natural);  // optimal: 2n - 1
-
-        // Bad ordering creates much more fill
         assert!(
-            nnz_bad > nnz_opt * 5,
-            "stride ordering should create ≥5x fill: bad={nnz_bad} opt={nnz_opt}"
+            nnz_natural > nnz_opt * 5,
+            "hub-first ordering should create ≥5× fill: natural={nnz_natural} opt={nnz_opt}"
         );
 
-        // AMD should recover near-optimal fill
-        let p_amd = amd(&m_bad);
-        let m_amd = p_amd.permute_sym(&m_bad).unwrap();
+        let p_amd = amd(&m);
+        let m_amd = p_amd.permute_sym(&m).unwrap();
         let nnz_amd = nnz_l(&m_amd);
 
-        assert!(
-            nnz_amd < nnz_bad / 2,
-            "AMD must cut fill by at least 2x from bad ordering: bad={nnz_bad}, amd={nnz_amd}"
-        );
-        assert!(
-            nnz_amd <= nnz_opt + 10,
-            "AMD should recover near-optimal fill: opt={nnz_opt}, amd={nnz_amd}"
+        assert_eq!(
+            nnz_amd, nnz_opt,
+            "AMD should recover optimal fill: amd={nnz_amd} opt={nnz_opt}"
         );
     }
 

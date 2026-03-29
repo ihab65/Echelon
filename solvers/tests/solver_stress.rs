@@ -45,9 +45,7 @@ fn spring_chain(n: usize, k_spring: f64) -> SymCsrMatrix {
     assert!(n >= 2, "spring chain needs at least 2 nodes");
     let mut coo = CooBuilder::new(n, n);
     for i in 0..n {
-        // Diagonal: interior nodes connect to two springs; ends to one.
-        let diag = if i == 0 || i == n - 1 { k_spring } else { 2.0 * k_spring };
-        coo.add(i, i, diag);
+        coo.add(i, i, 2.0 * k_spring);  // all nodes: 2k (wall spring + interior spring)
     }
     for i in 0..(n - 1) {
         coo.add(i, i + 1, -k_spring);
@@ -165,8 +163,7 @@ fn a5_spring_chain_exact_midpoint_load() {
     let n = 100_usize;
     let k = spring_chain(n, 1.0);
 
-    // Unit load at midpoint (node 50, 0-based)
-    let mid = n / 2;
+    let mid = n / 2;  // node index 50
     let mut f = vec![0.0_f64; n];
     f[mid] = 1.0;
 
@@ -174,12 +171,13 @@ fn a5_spring_chain_exact_midpoint_load() {
     let res = relative_residual(&k, &f, &u);
     assert!(res < 1e-10, "residual {res:.2e}");
 
-    // Analytical maximum displacement
-    let m          = mid as f64;
-    let n_f        = n as f64;
-    let u_max_exact = m * (n_f - m) / n_f;
+    // Exact solution for clamped-clamped bar: unit load at free DOF index m
+    // among n free DOFs. u_max = m*(n+1-m)/(n+1), with m = mid+1 (1-indexed).
+    let m           = (mid + 1) as f64;   // 51.0  (1-indexed free DOF)
+    let n_f         = n as f64;
+    let u_max_exact = m * (n_f + 1.0 - m) / (n_f + 1.0);  // 51*50/101 ≈ 25.247
     let u_max_calc  = u.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let rel_err = (u_max_calc - u_max_exact).abs() / u_max_exact;
+    let rel_err     = (u_max_calc - u_max_exact).abs() / u_max_exact;
     assert!(
         rel_err < 1e-10,
         "midpoint displacement: computed={u_max_calc:.10}, exact={u_max_exact:.10}, rel_err={rel_err:.2e}"
@@ -381,79 +379,91 @@ fn b6_laplacian_rcm_validity_and_correctness() {
 /// algorithm was designed for.
 #[test]
 fn b7_laplacian_rcm_helps_on_badly_ordered_mesh() {
-    use solvers::ordering::{Graph, rcm};
+    use solvers::ordering::{Graph, Permutation, rcm};
 
     let nx = 15;
     let ny = 15;
     let k_natural = laplacian_2d(nx, ny);
     let n         = k_natural.n;
 
-    // Apply a deterministic "bad" permutation: reverse all node indices.
-    // This maps the compact row-major band into one that is also compact
-    // (reversal preserves bandwidth for a symmetric matrix).
-    // Instead, use a stride permutation that genuinely destroys locality:
-    // new_idx i → old_idx (i * 7) % n  (for n not divisible by 7)
-    // 225 = 15*15, gcd(7, 225) = 1, so this is a valid permutation.
-    let bad_perm_vec: Vec<usize> = (0..n).map(|i| (i * 7) % n).collect();
-
-    // Verify the stride permutation is a valid bijection
-    let mut check = vec![false; n];
-    for &v in &bad_perm_vec { check[v] = true; }
-    assert!(check.iter().all(|&c| c), "stride permutation is not a bijection");
-
-    use solvers::ordering::Permutation;
-    let bad_perm  = Permutation::new(bad_perm_vec).unwrap();
-    let k_bad     = bad_perm.permute_sym(&k_natural).unwrap();
-
-    // Bandwidth of k_natural (row-major, compact):  nx - 1 = 14
-    // Bandwidth of k_bad (stride-7 permuted, scattered): should be >> 14
-    fn matrix_bandwidth(k: &sparse::SymCsrMatrix) -> usize {
+    // ── Helper: bandwidth of a SymCsrMatrix (upper triangle only, but
+    //    symmetric so max |col - row| over stored entries suffices) ──────────
+    fn bandwidth(k: &SymCsrMatrix) -> usize {
         let mut bw = 0_usize;
         for row in 0..k.n {
-            let start = k.row_ptr()[row];
-            let end   = k.row_ptr()[row + 1];
-            for &col in &k.col_idx()[start..end] {
+            for &col in &k.col_idx()[k.row_ptr()[row]..k.row_ptr()[row + 1]] {
                 bw = bw.max(col.abs_diff(row));
             }
         }
         bw
     }
 
-    let bw_natural = matrix_bandwidth(&k_natural);
-    let bw_bad     = matrix_bandwidth(&k_bad);
+    // ── 1. Apply a stride-7 permutation to destroy locality ─────────────────
+    // gcd(7, 225) = 1  so this is a valid bijection on 0..225
+    let bad_perm_vec: Vec<usize> = (0..n).map(|i| (i * 7) % n).collect();
+    let bad_perm  = Permutation::new(bad_perm_vec).unwrap();
+    let k_bad     = bad_perm.permute_sym(&k_natural).unwrap();
+
+    let bw_natural = bandwidth(&k_natural);
+    let bw_bad     = bandwidth(&k_bad);
     assert!(
         bw_bad > bw_natural * 5,
-        "b7: expected stride permutation to blow up bandwidth \
+        "b7: stride permutation should blow up bandwidth \
          (bw_natural={bw_natural}, bw_bad={bw_bad})"
     );
 
-    // Now apply RCM to the badly-ordered matrix
-    let g       = Graph::from_sym(&k_bad);
-    let perm    = rcm(&g);
-    let k_rcm   = perm.permute_sym(&k_bad).unwrap();
-    let bw_rcm  = matrix_bandwidth(&k_rcm);
+    // ── 2. Apply RCM to the badly-ordered matrix ─────────────────────────────
+    let g      = Graph::from_sym(&k_bad);
+    let perm   = rcm(&g);
+    let k_rcm  = perm.permute_sym(&k_bad).unwrap();
+    let bw_rcm = bandwidth(&k_rcm);
 
-    // RCM must significantly reduce bandwidth compared to k_bad
     assert!(
         bw_rcm < bw_bad,
-        "b7: RCM should reduce bandwidth of badly-ordered matrix: \
-         bw_bad={bw_bad}, bw_rcm={bw_rcm}"
+        "b7: RCM must reduce bandwidth: bw_bad={bw_bad}, bw_rcm={bw_rcm}"
     );
     assert!(
         bw_rcm <= bw_natural * 4,
-        "b7: RCM bandwidth {bw_rcm} should be within 4× of the natural \
-         (optimal) bandwidth {bw_natural}"
+        "b7: RCM bandwidth {bw_rcm} should be within 4× of natural {bw_natural}"
     );
 
-    // And the solution must still be correct after this double permutation
-    let f = rhs_sin(n);
-    let u_natural = full_solve(&k_natural, &f);
-    let u_bad     = full_solve(&k_bad, &f);
+    // ── 3. Correctness: solving k_natural and k_bad must give the same
+    //    answer in natural DOF order ──────────────────────────────────────────
+    //
+    // k_bad is k_natural permuted by bad_perm: k_bad[i,j] = k_natural[p[i],p[j]]
+    // So if k_natural u = f, then k_bad solves for u in the permuted space.
+    // We must permute f accordingly and then unpermute the solution.
+    let f_natural = rhs_sin(n);
 
-    for (i, (&un, &ub)) in u_natural.iter().zip(u_bad.iter()).enumerate() {
-        let rel = (un - ub).abs() / un.abs().max(1e-14);
-        assert!(rel < 1e-9, "b7: solution mismatch at dof {i}: {un:.8e} vs {ub:.8e}");
+    // Solve k_natural u = f directly (SparseSolver handles its own ordering)
+    let u_natural = full_solve(&k_natural, &f_natural);
+
+    // Permute RHS into the bad ordering's DOF space: f_bad[i] = f_natural[bad_perm[i]]
+    let f_bad: Vec<f64> = (0..n).map(|i| f_natural[bad_perm.old_index(i)]).collect();
+
+    // Solve k_bad u_bad = f_bad; solution is in permuted DOF order
+    let u_bad_perm = full_solve(&k_bad, &f_bad);
+
+    // Unpermute: u_natural_recovered[bad_perm[i]] = u_bad_perm[i]
+    let mut u_recovered = vec![0.0_f64; n];
+    for i in 0..n {
+        u_recovered[bad_perm.old_index(i)] = u_bad_perm[i];
     }
+
+    for (i, (&un, &ur)) in u_natural.iter().zip(u_recovered.iter()).enumerate() {
+        let rel = (un - ur).abs() / un.abs().max(1e-14);
+        assert!(
+            rel < 1e-9,
+            "b7: solution mismatch at dof {i}: natural={un:.8e} recovered={ur:.8e} rel={rel:.2e}"
+        );
+    }
+
+    // ── 4. Residual check on both systems ────────────────────────────────────
+    let res_natural = relative_residual(&k_natural, &f_natural, &u_natural);
+    assert!(res_natural < 1e-8, "b7: k_natural residual {res_natural:.2e}");
+
+    let res_bad = relative_residual(&k_bad, &f_bad, &u_bad_perm);
+    assert!(res_bad < 1e-8, "b7: k_bad residual {res_bad:.2e}");
 }
 
 // =============================================================================

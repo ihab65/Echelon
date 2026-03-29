@@ -482,37 +482,40 @@ mod tests {
     /// For a BADLY-ORDERED path, RCM must reduce fill significantly.
     #[test]
     fn rcm_reduces_fill_on_badly_ordered_path() {
+        // A path graph has treewidth 1 — fill is O(n) regardless of ordering,
+        // so no permutation can produce 5× fill. Use a path but assert only
+        // what is actually achievable: RCM must reduce fill from a bad ordering.
         let n = 101;
         let (_, m_natural) = path_graph(n);
-
-        // Stride permutation destroys locality
-        let bad_perm_vec: Vec<usize> = (0..n).map(|i| (i * 3) % n).collect();
-        let bad_perm = Permutation::new(bad_perm_vec).unwrap();
-        let m_bad    = bad_perm.permute_sym(&m_natural).unwrap();
-
-        let nnz_bad   = nnz_l(&m_bad);
         let nnz_natural = nnz_l(&m_natural); // 2n−1 (optimal)
 
-        // Bad ordering produces much more fill than the optimal path ordering
+        // Stride-50 on n=101 (gcd=1) gives maximum displacement per edge.
+        let bad_perm_vec: Vec<usize> = (0..n).map(|i| (i * 50) % n).collect();
+        let bad_perm = Permutation::new(bad_perm_vec).unwrap();
+        let m_bad    = bad_perm.permute_sym(&m_natural).unwrap();
+        let nnz_bad  = nnz_l(&m_bad);
+
+        // Verify the bad ordering actually creates more fill than optimal.
         assert!(
-            nnz_bad > nnz_natural * 5,
-            "stride ordering should produce ≥5× fill: nnz_bad={nnz_bad} nnz_natural={nnz_natural}"
+            nnz_bad > nnz_natural,
+            "stride-50 ordering should produce more fill than optimal: \
+            nnz_bad={nnz_bad} nnz_natural={nnz_natural}"
         );
 
-        // RCM should bring fill back near the natural value
-        let g      = Graph::from_sym(&m_bad);
-        let p      = rcm(&g);
-        let m_rcm  = p.permute_sym(&m_bad).unwrap();
+        // RCM should bring fill back near the natural value.
+        let g       = Graph::from_sym(&m_bad);
+        let p       = rcm(&g);
+        let m_rcm   = p.permute_sym(&m_bad).unwrap();
         let nnz_rcm = nnz_l(&m_rcm);
 
         assert!(
-            nnz_rcm < nnz_bad / 2,
-            "RCM must reduce fill from bad ordering by at least 2×: \
-             nnz_bad={nnz_bad}, nnz_rcm={nnz_rcm}"
+            nnz_rcm <= nnz_natural + 10,
+            "RCM should recover near-optimal fill: \
+            nnz_natural={nnz_natural}, nnz_rcm={nnz_rcm}"
         );
         assert!(
-            nnz_rcm <= nnz_natural + 10,
-            "RCM should recover near-optimal fill: nnz_natural={nnz_natural}, nnz_rcm={nnz_rcm}"
+            nnz_rcm < nnz_bad,
+            "RCM must reduce fill from bad ordering: bad={nnz_bad}, rcm={nnz_rcm}"
         );
     }
 
