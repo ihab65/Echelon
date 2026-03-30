@@ -3,7 +3,7 @@ members = [
     "sparse",
     "solvers", 
     "fem-core",
-    "fem-tests",
+    "fem-tests", "materials", "elements",
 ]
 
 resolver = "3"

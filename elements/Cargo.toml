@@ -1,0 +1,24 @@
+[package]
+name    = "elements"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sparse    = { path = "../sparse" }
+fem_core  = { path = "../fem-core" }
+materials = { path = "../materials" }
+
+# num-dual is required only for the autodiff feature (Engine B energy<T> paths).
+# Without this feature, the crate compiles with no autodiff dependency and
+# all energy<T> generic code is gated out.
+num-dual  = { version = "0.13", optional = true }
+
+# num-traits is always needed for the From<f64> lifts in energy<T>.
+num-traits = "0.2"
+
+[features]
+default  = []
+autodiff = ["dep:num-dual", "materials/autodiff"]
+
+[dev-dependencies]
+# none yet — integration tests live in fem-tests

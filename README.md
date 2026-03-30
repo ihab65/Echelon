@@ -282,7 +282,7 @@ Echelon/
 - [x] Symbolic Cholesky (elimination tree + L pattern)
 - [x] Numeric Cholesky (left-looking, dense column workspace)
 - [x] Triangular solve (with permutation)
-- [ ] `core` crate (index newtypes, transforms)
+- [x] `core` crate (index newtypes, transforms)
 - [ ] `materials`: `ElasticUniaxial`
 - [ ] `elements`: `Truss2d`, `ElasticBeam2d`
 - [ ] `assembly`: DOF numbering, stiffness assembly, BC application
