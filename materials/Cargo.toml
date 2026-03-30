@@ -1,0 +1,17 @@
+[package]
+name    = "materials"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# num-traits provides Zero, One, and related arithmetic traits used by
+# SmoothUniaxial<T> and the elastic material implementations.
+num-traits = "0.2"
+num-dual   = { version = "0.13", optional = true }
+
+[features]
+default  = []
+autodiff = ["dep:num-dual"]
+
+[dev-dependencies]
+# none yet
