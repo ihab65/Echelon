@@ -134,7 +134,7 @@ impl Element for Truss2d {
     fn f_int(&self, u: &[f64]) -> Vec<f64> {
         debug_assert_eq!(u.len(), 4);
         let eps = axial_strain(u, self.transf.cos, self.transf.sin, self.transf.length);
-        f_int_global(self.ea_over_l, self.transf.cos, self.transf.sin, eps).to_vec()
+        f_int_global(self.ea_over_l, self.transf.cos, self.transf.sin, eps * self.transf.lenght).to_vec()
     }
 
     fn commit(&mut self, u: &[f64]) {
@@ -167,7 +167,8 @@ impl DifferentiableElement for Truss2d {
     fn energy_f64(&self, u: &[f64]) -> f64 {
         debug_assert_eq!(u.len(), 4);
         let eps = axial_strain(u, self.transf.cos, self.transf.sin, self.transf.length);
-        0.5 * self.ea_over_l * eps * eps
+        let delta = eps * self.transf.length;
+        0.5 * self.ea_over_l * delta * delta
     }
 
     /// Override the default finite-difference stiffness with the closed-form
@@ -217,11 +218,11 @@ impl Assembleable for Truss2d {
                 // f_int = (EA/L) * ε * direction
                 // ∂f_int/∂E = (A/L) * ε * direction
                 let a_over_l = self.ea_over_l / self.material.e; // = A/L
-                a_over_l * eps
+                a_over_l * eps * l
             }
             params::A => {
-                // ∂(EA/L)/∂A = E/L → sensitivity = (E/L) * ε
-                (self.material.e / l) * eps
+                // ∂(EA/L)/∂A = E/L → sensitivity = E * ε
+                self.material.e * eps
             }
             _ => panic!("Truss2d: param_idx {param_idx} out of range (n_params=2)"),
         };
@@ -405,7 +406,7 @@ mod tests {
         let a = 0.01_f64;
         let l = 2.0_f64;
         let eps = 1e-3 / l;
-        let scale = (a / l) * eps;
+        let scale = a * eps;
         assert!((dr[0] - -scale).abs() < 1e-20, "dr[0]");
         assert!((dr[2] -  scale).abs() < 1e-20, "dr[2]");
         assert!(dr[1].abs() < 1e-25);
