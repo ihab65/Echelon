@@ -39,6 +39,7 @@ use crate::traits::{Assembleable, DifferentiableElement, Element};
 /// # Example
 ///
 /// ```rust
+/// use elements::Element;
 /// use elements::Truss2d;
 /// use fem_core::NodeId;
 ///
@@ -134,7 +135,7 @@ impl Element for Truss2d {
     fn f_int(&self, u: &[f64]) -> Vec<f64> {
         debug_assert_eq!(u.len(), 4);
         let eps = axial_strain(u, self.transf.cos, self.transf.sin, self.transf.length);
-        f_int_global(self.ea_over_l, self.transf.cos, self.transf.sin, eps * self.transf.lenght).to_vec()
+        f_int_global(self.ea_over_l, self.transf.cos, self.transf.sin, eps * self.transf.length).to_vec()
     }
 
     fn commit(&mut self, u: &[f64]) {
