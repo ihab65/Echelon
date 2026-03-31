@@ -467,7 +467,7 @@ mod tests {
         // ∂f[0]/∂E = -(A/L) * ε = -(0.01/2) * 5e-4 = -1.25e-6
         let a = b.a(); let l = b.length();
         let eps = 1e-3 / l;
-        let expected_axial = -(a / l) * eps;
+        let expected_axial = -a * eps;
         assert!(
             (dr[0] - expected_axial).abs() < 1e-15,
             "dr[0]={:.6e} expected {expected_axial:.6e}", dr[0]
