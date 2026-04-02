@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# No external dependencies — this crate is pure type definitions
-# and small fixed-size computations.
+thiserror = { workspace = true }
+miette = { workspace = true }
 sparse = { path = "../sparse" }
 
 [dev-dependencies]

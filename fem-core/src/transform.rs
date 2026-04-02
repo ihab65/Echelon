@@ -35,7 +35,8 @@
 
 use sparse::SparseScalar;
 
-use crate::dense::{transform_stiffness as dense_transform};
+use crate::{dense::transform_stiffness as dense_transform};
+use crate::error::{Result, CoreError};
 
 /// Geometric properties of a 2D frame or truss element.
 ///
@@ -65,19 +66,26 @@ impl<T: SparseScalar> CoordTransf2d<T> {
     /// # Panics
     /// Panics in debug mode if the element has zero length
     /// (nodes are coincident).  In release mode the result is NaN.
-    pub fn from_nodes(x1: T, y1: T, x2: T, y2: T) -> Self {
+    pub fn from_nodes(x1: T, y1: T, x2: T, y2: T) -> Result<Self> {
         let dx = x2 - x1;
         let dy = y2 - y1;
         let length = (dx * dx + dy * dy).scalar_sqrt();
-        debug_assert!(
-            length.real_part() > 0.0,
-            "CoordTransf2d: element has zero length (nodes are coincident)"
-        );
-        Self {
+        
+        if length.real_part() < 1e-14 {
+            return Err(CoreError::DegenerateGeometry {
+                x1: x1.real_part(),
+                y1: y1.real_part(),
+                x2: x2.real_part(),
+                y2: y2.real_part(),
+                length: length.real_part(),
+            });
+        }
+        
+        Ok(Self {
             cos: dx / length,
             sin: dy / length,
             length,
-        }
+        })
     }
 
     /// Construct directly from known `cos`, `sin`, and `length`.
@@ -255,7 +263,7 @@ mod tests {
 
     #[test]
     fn horizontal_element() {
-        let t = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 0.0);
+        let t = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 0.0).unwrap();
         assert!((t.cos - 1.0).real_part().abs() < 1e-14);
         assert!((t.sin - 0.0).real_part().abs() < 1e-14);
         assert!((t.length - 3.0).real_part().abs() < 1e-14);
@@ -263,7 +271,7 @@ mod tests {
 
     #[test]
     fn vertical_element() {
-        let t = CoordTransf2d::from_nodes(0.0, 0.0, 0.0, 4.0);
+        let t = CoordTransf2d::from_nodes(0.0, 0.0, 0.0, 4.0).unwrap();
         assert!((t.cos - 0.0).real_part().abs() < 1e-14);
         assert!((t.sin - 1.0).real_part().abs() < 1e-14);
         assert!((t.length - 4.0).real_part().abs() < 1e-14);
@@ -271,7 +279,7 @@ mod tests {
 
     #[test]
     fn diagonal_45_element() {
-        let t = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 1.0);
+        let t = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 1.0).unwrap();
         assert!((t.cos - FRAC_1_SQRT_2).abs() < 1e-14);
         assert!((t.sin - FRAC_1_SQRT_2).abs() < 1e-14);
         assert!((t.length - 2.0_f64.sqrt()).abs() < 1e-14);
@@ -279,20 +287,20 @@ mod tests {
 
     #[test]
     fn angle_horizontal() {
-        let t = CoordTransf2d::from_nodes(0.0, 0.0, 5.0, 0.0);
+        let t = CoordTransf2d::from_nodes(0.0, 0.0, 5.0, 0.0).unwrap();
         assert!((t.angle_rad() - 0.0).real_part().abs() < 1e-14);
         assert!((t.angle_deg() - 0.0).real_part().abs() < 1e-14);
     }
 
     #[test]
     fn angle_45_degrees() {
-        let t = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 1.0);
+        let t = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 1.0).unwrap();
         assert!((t.angle_deg() - 45.0).real_part().abs() < 1e-12);
     }
 
     #[test]
     fn reversed_flips_direction() {
-        let t = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0);
+        let t = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).unwrap();
         let r = t.reversed();
         assert!((r.cos + t.cos).real_part().abs() < 1e-14);
         assert!((r.sin + t.sin).real_part().abs() < 1e-14);
@@ -304,7 +312,7 @@ mod tests {
     #[test]
     fn t6x6_is_orthogonal() {
         // T * Tᵀ = I  (T is orthogonal → Tᵀ = T⁻¹)
-        let t_mat = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).t_matrix_6x6();
+        let t_mat = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).unwrap().t_matrix_6x6();
         let tt = transpose(&t_mat);
         let product = matmul(&t_mat, &tt);
         let eye: [[f64; 6]; 6] = {
@@ -317,7 +325,7 @@ mod tests {
 
     #[test]
     fn t6x6_horizontal_is_identity() {
-        let t_mat = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 0.0).t_matrix_6x6();
+        let t_mat = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 0.0).unwrap().t_matrix_6x6();
         let eye: [[f64; 6]; 6] = {
             let mut m = mat_zero::<6, f64>();
             for i in 0..6 { m[i][i] = 1.0; }
@@ -330,7 +338,7 @@ mod tests {
 
     #[test]
     fn t4x4_is_orthogonal() {
-        let t_mat = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).t_matrix_4x4();
+        let t_mat = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).unwrap().t_matrix_4x4();
         let tt = transpose(&t_mat);
         let product = matmul(&t_mat, &tt);
         let eye: [[f64; 4]; 4] = {
@@ -346,7 +354,7 @@ mod tests {
     #[test]
     fn transform_6x6_horizontal_unchanged() {
         // For a horizontal element, T = I and Tᵀ K T = K
-        let transf = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 0.0);
+        let transf = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 0.0).unwrap();
         // Simple symmetric 6×6 with non-trivial values
         let mut ke: [[f64; 6]; 6] = mat_zero();
         ke[0][0] =  1.0; ke[0][3] = -1.0;
@@ -362,7 +370,7 @@ mod tests {
     #[test]
     fn transform_4x4_vertical_truss() {
         // Vertical element: stiffness in y-direction after transform
-        let transf = CoordTransf2d::from_nodes(0.0, 0.0, 0.0, 1.0);
+        let transf = CoordTransf2d::from_nodes(0.0, 0.0, 0.0, 1.0).unwrap();
         let ke_local: [[f64; 4]; 4] = [
             [ 1.0, 0.0, -1.0, 0.0],
             [ 0.0, 0.0,  0.0, 0.0],
@@ -384,7 +392,7 @@ mod tests {
     #[test]
     fn rotation_3x3_preserves_rotation_dof() {
         // The θ DOF (index 2) should be unchanged by the rotation
-        let r = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).rotation_3x3();
+        let r = CoordTransf2d::from_nodes(0.0, 0.0, 3.0, 4.0).unwrap().rotation_3x3();
         assert!((r[2][2] - 1.0).real_part().abs() < 1e-14);
         assert!((r[0][2]).real_part().abs() < 1e-14);
         assert!((r[1][2]).real_part().abs() < 1e-14);
@@ -394,7 +402,7 @@ mod tests {
 
     #[test]
     fn rotation_3x3_is_orthogonal() {
-        let r = CoordTransf2d::from_nodes(1.0, 0.0, 4.0, 4.0).rotation_3x3();
+        let r = CoordTransf2d::from_nodes(1.0, 0.0, 4.0, 4.0).unwrap().rotation_3x3();
         let rt = transpose(&r);
         let rrt = matmul(&r, &rt);
         let eye: [[f64; 3]; 3] = [[1.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,1.0]];

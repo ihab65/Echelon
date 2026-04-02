@@ -35,6 +35,9 @@ pub mod model;
 pub mod dense;
 pub mod transform;
 
+pub mod error; 
+pub use error::CoreError;
+
 // Flat re-exports for the most commonly used types
 pub use ids::{NodeId, ElemId, GlobalDof, LocalDof};
 pub use dof_map::DofMap;

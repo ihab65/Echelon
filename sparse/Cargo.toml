@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-thiserror = "2.0.16"
+thiserror = { workspace = true }
+miette = { workspace = true }
 num-traits = "0.2"
 num-dual = { version = "0.13", optional = true }
 rayon     = { version = "1.10", optional = true }
