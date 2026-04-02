@@ -38,13 +38,15 @@ use std::ops::{Add, Mul};
 pub struct ElasticUniaxial {
     /// Young's modulus (Pa).
     pub e: f64,
+    /// Optional mass density (kg/m³) for self-weight calculations.
+    pub rho: Option<f64>,
     /// Committed strain (last converged load step).
     committed_strain: f64,
 }
 
 impl ElasticUniaxial {
     /// Construct with elastic modulus `e` (Pa).
-    pub fn new(e: f64) -> Result<Self> {
+    pub fn new(e: f64, rho: Option<f64>) -> Result<Self> {
         if e <= 0.0 {
             return Err(MaterialError::InadmissibleParameter {
                 parameter: "E (Young's modulus)",
@@ -53,7 +55,18 @@ impl ElasticUniaxial {
             });
         }
 
-        Ok(Self { e, committed_strain: 0.0 })
+        match rho {
+            Some(r) if r < 0.0 => {
+                return Err(MaterialError::InadmissibleParameter {
+                    parameter: "rho (mass density)",
+                    value: r,
+                    requirement: "rho >= 0",
+                });
+            }
+            _ => {}
+        }
+
+        Ok(Self { e, rho, committed_strain: 0.0 })
     }
 }
 
@@ -208,7 +221,7 @@ mod tests {
     use crate::traits::UniaxialMaterial;
 
     fn steel() -> ElasticUniaxial {
-        ElasticUniaxial::new(200e9).unwrap()
+        ElasticUniaxial::new(200e9, None).unwrap()
     }
 
     // ---- UniaxialMaterial ----

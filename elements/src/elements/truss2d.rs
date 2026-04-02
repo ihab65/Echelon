@@ -82,17 +82,9 @@ impl Truss2d {
         node1: NodeId, node2: NodeId,
         x1: f64, y1: f64,
         x2: f64, y2: f64,
-        e: f64, a: f64,
+        material: ElasticUniaxial,
+        a: f64,
     ) -> Result<Self> {
-        if e <= 0.0 {
-            return Err(ElementError::InadmissibleSection {
-                element_type: "Truss2d",
-                parameter: "E (Young's modulus)",
-                value: e,
-                requirement: "must be > 0",
-            });
-        }
-
         if a <= 0.0 {
             return Err(ElementError::InadmissibleSection {
                 element_type: "Truss2d",
@@ -103,8 +95,7 @@ impl Truss2d {
         }
 
         let transf   = CoordTransf2d::from_nodes(x1, y1, x2, y2)?;
-        let material = ElasticUniaxial::new(e)?;
-        let ea_over_l = e * a / transf.length;
+        let ea_over_l = material.e * a / transf.length;
 
         // 2D truss: 2 DOFs per node (ndf = 2)
         let dof_map = DofMap::from_nodes(&[node1, node2], 2);
@@ -130,6 +121,9 @@ impl Truss2d {
     #[inline]
     pub fn e(&self) -> f64 { self.material.e }
 
+    /// Cross-section area (m²).
+    pub fn a(&self) -> f64 { self.ea_over_l * self.transf.length / self.material.e }
+
     /// EA/L (axial stiffness).
     #[inline]
     pub fn ea_over_l(&self) -> f64 { self.ea_over_l }
@@ -146,6 +140,24 @@ impl Element for Truss2d {
     fn ke_flat(&self, _u: &[f64]) -> Vec<f64> {
         // Linear elastic: stiffness is displacement-independent.
         stiffness_global(self.ea_over_l, self.transf.cos, self.transf.sin).to_vec()
+    }
+
+    fn mass_flat(&self) -> Vec<f64> {
+        // If the user didn't define rho, the mass is zero.
+        // The assembly/analysis (Eigen or Transiant) crate 
+        // will intercept all-zero mass matrices if needed.
+        let rho = self.material.rho.unwrap_or(0.0);
+        let m_total = rho * self.a() * self.length();
+        let m_half = m_total / 2.0;
+
+        let mut lumped_mass = vec![0.0; 16]; // 4x4 matrix for 2D truss
+        
+        lumped_mass[0] = m_half;  // node 1 ux
+        lumped_mass[5] = m_half;  // node 1 uy
+        lumped_mass[10] = m_half; // node 2 ux
+        lumped_mass[15] = m_half; // node 2 uy
+
+        lumped_mass
     }
 
     fn f_int(&self, u: &[f64]) -> Vec<f64> {
@@ -273,12 +285,22 @@ mod tests {
 
     /// Horizontal truss element: E=200 GPa, A=0.01 m², L=2 m
     fn horizontal() -> Truss2d {
-        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, 200e9, 0.01).unwrap()
+        Truss2d::new(
+            NodeId(0), NodeId(1), 
+            0.0, 0.0, 2.0, 0.0, 
+            ElasticUniaxial::new(200e9, None).unwrap(), 
+            0.01
+        ).unwrap()
     }
 
     /// 45° truss element: from (0,0) to (1,1)
     fn diagonal() -> Truss2d {
-        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 1.0, 1.0, 200e9, 0.01).unwrap()
+        Truss2d::new(
+            NodeId(0), NodeId(1), 
+            0.0, 0.0, 1.0, 1.0, 
+            ElasticUniaxial::new(200e9, None).unwrap(), 
+            0.01
+        ).unwrap()
     }
 
     // ---- Construction ----

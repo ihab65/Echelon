@@ -49,6 +49,10 @@ pub trait Element: Send + Sync {
     /// `SymCsrMatrix::scatter_add`.
     fn ke_flat(&self, u: &[f64]) -> Vec<f64>;
 
+    /// Returns the element's mass matrix (lumped) as a flat array.
+    /// The length of the returned vector should be `n_dof()`.
+    fn mass_flat(&self) -> Vec<f64>;
+
     /// Internal force vector in **global** coordinates, for displacement `u`.
     ///
     /// # Arguments

@@ -90,17 +90,9 @@ impl ElasticBeam2d {
         node1: NodeId, node2: NodeId,
         x1: f64, y1: f64,
         x2: f64, y2: f64,
-        e: f64, a: f64, iz: f64,
-    ) -> Result<Self> {
-        if e <= 0.0 {
-            return Err(ElementError::InadmissibleSection {
-                element_type: "ElasticBeam2d",
-                parameter: "E",
-                value: e,
-                requirement: "E > 0",
-            });
-        }
-        
+        material: ElasticUniaxial,
+        a: f64, iz: f64,
+    ) -> Result<Self> {    
         if a <= 0.0 {
             return Err(ElementError::InadmissibleSection {
                 element_type: "ElasticBeam2d",
@@ -120,8 +112,7 @@ impl ElasticBeam2d {
         }
 
         let transf = CoordTransf2d::from_nodes(x1, y1, x2, y2)?;
-        let ke_local_cached = ke_local(e, a, iz, transf.length);
-        let material = ElasticUniaxial::new(e)?;
+        let ke_local_cached = ke_local(material.e, a, iz, transf.length);
         // 2D frame: 3 DOFs per node
         let dof_map = DofMap::from_nodes(&[node1, node2], 3);
 
@@ -192,6 +183,28 @@ impl Element for ElasticBeam2d {
     fn ke_flat(&self, _u: &[f64]) -> Vec<f64> {
         // Linear elastic: stiffness is displacement-independent.
         self.ke_global_flat().to_vec()
+    }
+
+    fn mass_flat(&self) -> Vec<f64> {
+        // If the user didn't define rho, the mass is zero.
+        // The assembly/analysis (Eigen or Transiant) crate 
+        // will intercept all-zero mass matrices if needed.
+        let rho = self.material.rho.unwrap_or(0.0);
+        let m_total = rho * self.a() * self.length();
+        let m_half = m_total / 2.0;
+
+        let mut lumped_mass = vec![0.0_f64; 36];
+        // Node 1 (UX, UY, RZ)
+        lumped_mass[0]  = m_half;       // Row 0, Col 0: u1_x
+        lumped_mass[7]  = m_half;       // Row 1, Col 1: u1_y
+        lumped_mass[14] = 1e-9;         // Row 2, Col 2: u1_theta
+        
+        // Node 2 (UX, UY, RZ)
+        lumped_mass[21] = m_half;       // Row 3, Col 3: u2_x
+        lumped_mass[28] = m_half;       // Row 4, Col 4: u2_y
+        lumped_mass[35] = 1e-9;         // Row 5, Col 5: u2_theta
+        
+        lumped_mass
     }
 
     fn f_int(&self, u: &[f64]) -> Vec<f64> {
@@ -356,7 +369,12 @@ mod tests {
 
     fn cantilever() -> ElasticBeam2d {
         // 2m horizontal beam, steel-like properties
-        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, 200e9, 0.01, 1e-4).unwrap()
+        ElasticBeam2d::new(
+            NodeId(0), NodeId(1),
+            0.0, 0.0, 2.0, 0.0, 
+            ElasticUniaxial::new(200e9, None).unwrap(), 
+            0.01, 1e-4
+        ).unwrap()
     }
 
     // ---- Construction ----
