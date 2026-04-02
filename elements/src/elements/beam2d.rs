@@ -212,11 +212,12 @@ impl Element for ElasticBeam2d {
         fg.to_vec()
     }
 
-    fn commit(&mut self, u: &[f64]) {
+    fn commit(&mut self, u: &[f64]) -> Result<()> {
         debug_assert_eq!(u.len(), 6);
         let ul = self.u_local(u);
         let eps = axial_strain(&ul, self.transf.length);
-        self.material.commit_state(eps);
+        self.material.commit_state(eps)?;
+        Ok(())
     }
 
     fn revert(&mut self) {
@@ -280,7 +281,7 @@ impl Assembleable for ElasticBeam2d {
         &self.dof_map
     }
 
-    fn partial_residual_wrt_param(&self, u_global: &[f64], param_idx: usize) -> Vec<f64> {
+    fn partial_residual_wrt_param(&self, u_global: &[f64], param_idx: usize) -> Result<Vec<f64>> {
         debug_assert_eq!(u_global.len(), 6);
 
         let e  = self.material.e;
@@ -315,7 +316,11 @@ impl Assembleable for ElasticBeam2d {
                 let dke = ke_local(e, 0.0, 1.0, l); // A=0, Iz=1 → bending only
                 f_int_local_from_ke(&dke, &ul)
             }
-            _ => panic!("ElasticBeam2d: param_idx {param_idx} out of range (n_params=3)"),
+            _ => return Err(ElementError::UnregisteredParameter {
+                element_type: "ElasticBeam2d",
+                idx: param_idx,
+                n_params: self.n_params(),
+            }),
         };
 
         // Rotate back to global: ∂f_global/∂θ = Tᵀ * ∂f_local/∂θ
@@ -326,7 +331,7 @@ impl Assembleable for ElasticBeam2d {
                 dfg[i] += t[j][i] * dfl_local[j];
             }
         }
-        dfg.to_vec()
+        Ok(dfg.to_vec())
     }
 
     fn n_params(&self) -> usize { 3 }
@@ -485,7 +490,7 @@ mod tests {
         let b = cantilever();
         // Pure axial elongation
         let u = [0.0, 0.0, 0.0, 1e-3, 0.0, 0.0];
-        let dr = b.partial_residual_wrt_param(&u, params::E);
+        let dr = b.partial_residual_wrt_param(&u, params::E).unwrap();
         assert_eq!(dr.len(), 6);
         // For axial strain ε = 1e-3/2:
         // ∂f[0]/∂E = -(A/L) * ε = -(0.01/2) * 5e-4 = -1.25e-6

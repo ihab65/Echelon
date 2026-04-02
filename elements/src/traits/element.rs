@@ -22,6 +22,8 @@
 //! This keeps the assembly loop a pure scatter-add with no geometric
 //! knowledge.
 
+use crate::error::Result;
+
 /// Minimal interface required by the Newton-Raphson assembly loop (Engine A).
 ///
 /// # Thread safety
@@ -63,7 +65,7 @@ pub trait Element: Send + Sync {
     ///
     /// # Arguments
     /// * `u` — the converged displacement at which state is committed
-    fn commit(&mut self, u: &[f64]);
+    fn commit(&mut self, u: &[f64]) -> Result<()>;
 
     /// Revert all internal state to the last committed state.
     ///

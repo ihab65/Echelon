@@ -20,6 +20,7 @@
 //!   without changing element implementations.
 
 use fem_core::DofMap;
+use crate::error::Result;
 
 /// Bridges an element to the global assembly loop and to Engine B.
 ///
@@ -56,7 +57,7 @@ pub trait Assembleable: crate::traits::Element {
     /// derivative is computed analytically from the element formulation.
     /// For material parameters the element delegates to its material's
     /// `AdjointSensitive::stress_sensitivity`.
-    fn partial_residual_wrt_param(&self, u_local: &[f64], param_idx: usize) -> Vec<f64>;
+    fn partial_residual_wrt_param(&self, u_local: &[f64], param_idx: usize) -> Result<Vec<f64>>;
 
     /// Number of parameters this element exposes for adjoint sensitivity.
     fn n_params(&self) -> usize;

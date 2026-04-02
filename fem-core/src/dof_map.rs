@@ -20,6 +20,7 @@
 //! 3. The lifetime of the output is tied to `&self`.
 
 use crate::ids::{GlobalDof, LocalDof, NodeId};
+use crate::error::{CoreError, Result};
 
 /// Maps local element DOF indices `[0..n_local)` to global DOF indices.
 ///
@@ -83,6 +84,32 @@ impl DofMap {
             }
         }
         Self { indices }
+    }
+
+    /// Validate that every global DOF index in this map is within bounds
+    /// for a system with `n_dof` total degrees of freedom.
+    ///
+    /// Call this during model assembly, after constructing the DOF map
+    /// and before the first `scatter_add`, to catch node numbering errors
+    /// before they produce silent wrong results.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::DofMapOverflow`] if any index `>= n_dof`.
+    pub fn validate_against(&self, n_dof: usize, ndf: usize) -> Result<()> {
+        for &global_dof in &self.indices {
+            if global_dof.0 >= n_dof {
+                // Work backwards: GlobalDof(g) came from NodeId(g / ndf)
+                let node_id = global_dof.0 / ndf;
+                let last_dof = node_id * ndf + (ndf - 1);
+                return Err(CoreError::DofMapOverflow {
+                    node_id,
+                    ndf,
+                    last_dof,
+                    n_dof,
+                });
+            }
+        }
+        Ok(())
     }
 
     // -----------------------------------------------------------------

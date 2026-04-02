@@ -73,9 +73,9 @@ impl UniaxialMaterial for ElasticUniaxial {
         self.e
     }
 
-    fn commit_state(&mut self, strain: f64) -> f64 {
+    fn commit_state(&mut self, strain: f64) -> Result<f64> {
         self.committed_strain = strain;
-        self.e * strain
+        Ok(self.e * strain)
     }
 
     fn revert_to_last_commit(&mut self) {
@@ -173,17 +173,16 @@ pub mod params {
 }
 
 impl AdjointSensitive for ElasticUniaxial {
-    fn stress_sensitivity(&self, param_idx: usize) -> f64 {
+    fn stress_sensitivity(&self, param_idx: usize) -> Result<f64> {
         match param_idx {
             params::E => {
                 // σ = E · ε_committed  →  ∂σ/∂E = ε_committed
-                self.committed_strain
+                Ok(self.committed_strain)
             }
-            _ => panic!(
-                "ElasticUniaxial: param_idx {} out of range (n_params={})",
-                param_idx,
-                self.n_params()
-            ),
+            _ => Err(MaterialError::UnregisteredParameter {
+                idx: param_idx,
+                n_params: self.n_params(),
+            }),
         }
     }
 
@@ -230,7 +229,7 @@ mod tests {
     #[test]
     fn commit_and_revert() {
         let mut m = steel();
-        m.commit_state(0.002);
+        m.commit_state(0.002).unwrap();
         m.revert_to_last_commit(); // no-op for elastic
         // stress at committed strain should be unchanged
         assert!((m.stress(0.002) - 400e6).abs() < 1.0);
@@ -240,7 +239,7 @@ mod tests {
     fn commit_returns_committed_stress() {
         let mut m = steel();
         let sigma = m.commit_state(0.001);
-        assert!((sigma - 200e6).abs() < 1.0);
+        assert!((sigma.unwrap() - 200e6).abs() < 1.0);
     }
 
     #[test]
@@ -273,15 +272,15 @@ mod tests {
     fn sensitivity_to_e_at_zero_strain() {
         let m = steel(); // committed_strain = 0
         // ∂σ/∂E = ε_committed = 0
-        assert_eq!(m.stress_sensitivity(params::E), 0.0);
+        assert_eq!(m.stress_sensitivity(params::E).unwrap(), 0.0);
     }
 
     #[test]
     fn sensitivity_to_e_after_commit() {
         let mut m = steel();
-        m.commit_state(0.002);
+        m.commit_state(0.002).unwrap();
         // ∂σ/∂E = ε_committed = 0.002
-        assert!((m.stress_sensitivity(params::E) - 0.002).abs() < 1e-15);
+        assert!((m.stress_sensitivity(params::E).unwrap() - 0.002).abs() < 1e-15);
     }
 
     #[test]
@@ -292,11 +291,5 @@ mod tests {
     #[test]
     fn param_name() {
         assert_eq!(steel().param_name(0), "E (Young's modulus)");
-    }
-
-    #[test]
-    #[should_panic(expected = "out of range")]
-    fn sensitivity_out_of_range_panics() {
-        steel().stress_sensitivity(99);
     }
 }

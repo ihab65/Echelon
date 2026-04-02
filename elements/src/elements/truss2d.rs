@@ -154,10 +154,11 @@ impl Element for Truss2d {
         f_int_global(self.ea_over_l, self.transf.cos, self.transf.sin, eps * self.transf.length).to_vec()
     }
 
-    fn commit(&mut self, u: &[f64]) {
+    fn commit(&mut self, u: &[f64]) -> Result<()> {
         debug_assert_eq!(u.len(), 4);
         let eps = axial_strain(u, self.transf.cos, self.transf.sin, self.transf.length);
-        self.material.commit_state(eps);
+        self.material.commit_state(eps)?;
+        Ok(())
     }
 
     fn revert(&mut self) {
@@ -219,7 +220,7 @@ impl Assembleable for Truss2d {
         &self.dof_map
     }
 
-    fn partial_residual_wrt_param(&self, u_local: &[f64], param_idx: usize) -> Vec<f64> {
+    fn partial_residual_wrt_param(&self, u_local: &[f64], param_idx: usize) -> Result<Vec<f64>> {
         debug_assert_eq!(u_local.len(), 4);
         let c   = self.transf.cos;
         let s   = self.transf.sin;
@@ -241,10 +242,14 @@ impl Assembleable for Truss2d {
                 // ∂(EA/L)/∂A = E/L → sensitivity = E * ε
                 self.material.e * eps
             }
-            _ => panic!("Truss2d: param_idx {param_idx} out of range (n_params=2)"),
+            _ => return Err(ElementError::UnregisteredParameter {
+                element_type: "Truss2d",
+                idx: param_idx,
+                n_params: self.n_params(),
+            }),
         };
 
-        vec![-scale * c, -scale * s, scale * c, scale * s]
+        Ok(vec![-scale * c, -scale * s, scale * c, scale * s])
     }
 
     fn n_params(&self) -> usize { 2 }
@@ -395,7 +400,7 @@ mod tests {
     fn commit_does_not_change_stiffness() {
         let mut t = horizontal();
         let ke_before = t.ke_flat(&[0.0; 4]);
-        t.commit(&[0.0, 0.0, 1e-3, 0.0]);
+        t.commit(&[0.0, 0.0, 1e-3, 0.0]).unwrap();
         let ke_after = t.ke_flat(&[0.0; 4]);
         assert_eq!(ke_before, ke_after);
     }
@@ -417,7 +422,7 @@ mod tests {
     fn partial_residual_e_direction_correct() {
         let t = horizontal();
         let u = [0.0, 0.0, 1e-3, 0.0]; // ε = 1e-3/2 = 5e-4
-        let dr = t.partial_residual_wrt_param(&u, params::E);
+        let dr = t.partial_residual_wrt_param(&u, params::E).unwrap();
         // ∂f/∂E = (A/L) * ε * [-c, -s, c, s]
         // A = ea_over_l / E * L = (200e9 * 0.01 / 2) / 200e9 * 2 = 0.01
         let a = 0.01_f64;
@@ -440,8 +445,8 @@ mod tests {
         let mut t1 = horizontal();
         let mut t2_box = t1.clone_box();
         // Commit different strains
-        t1.commit(&[0.0, 0.0, 1e-3, 0.0]);
-        t2_box.commit(&[0.0, 0.0, 2e-3, 0.0]);
+        t1.commit(&[0.0, 0.0, 1e-3, 0.0]).unwrap();
+        t2_box.commit(&[0.0, 0.0, 2e-3, 0.0]).unwrap();
         // Stiffness matrices should still be equal (linear elastic)
         assert_eq!(t1.ke_flat(&[0.0; 4]), t2_box.ke_flat(&[0.0; 4]));
     }

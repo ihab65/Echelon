@@ -38,6 +38,8 @@
 //! The parameter index `i` is material-model-specific.  Each model documents
 //! which index corresponds to which parameter.
 
+use crate::error::Result;
+
 /// Extension trait for materials that can provide exact parameter sensitivities
 /// for use in the adjoint method (Engine B).
 ///
@@ -63,7 +65,7 @@ pub trait AdjointSensitive {
     ///
     /// # Panics
     /// May panic if `param_idx` is out of range for this material.
-    fn stress_sensitivity(&self, param_idx: usize) -> f64;
+    fn stress_sensitivity(&self, param_idx: usize) -> Result<f64>;
 
     /// Number of parameters this material exposes for sensitivity analysis.
     fn n_params(&self) -> usize;

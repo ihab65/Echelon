@@ -13,6 +13,8 @@
 //! Engine B adjoint sensitivity analysis should also implement
 //! [`AdjointSensitive`] (see `adjoint.rs`).
 
+use crate::error::Result;
+
 /// The core interface for a one-dimensional constitutive model.
 ///
 /// All methods operate in **strain space**: the element passes the current
@@ -66,7 +68,16 @@ pub trait UniaxialMaterial: Send + Sync {
     ///
     /// # Arguments
     /// * `strain` — the converged trial strain
-    fn commit_state(&mut self, strain: f64) -> f64;
+    /// 
+    /// /// Returns the committed stress on success. Returns
+    /// [`MaterialError::StrainDomainViolation`] if `strain` falls outside
+    /// the valid domain of this constitutive model — for example, beyond
+    /// the crushing strain of a concrete model or the fracture strain of
+    /// a steel model.
+    ///
+    /// For `ElasticUniaxial`, this never returns `Err` because linear
+    /// elastic has an unbounded strain domain.
+    fn commit_state(&mut self, strain: f64) -> Result<f64>;
 
     /// Revert all internal state to the last committed state.
     ///
