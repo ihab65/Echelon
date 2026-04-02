@@ -34,6 +34,7 @@ use materials::UniaxialMaterial;
 
 use crate::local::beam::{axial_strain, f_int_local_from_ke, ke_local};
 use crate::traits::{Assembleable, DifferentiableElement, Element};
+use crate::error::{Result, ElementError};
 
 // -----------------------------------------------------------------
 // Struct
@@ -90,18 +91,41 @@ impl ElasticBeam2d {
         x1: f64, y1: f64,
         x2: f64, y2: f64,
         e: f64, a: f64, iz: f64,
-    ) -> Self {
-        assert!(e  > 0.0, "ElasticBeam2d: E must be positive, got {e}");
-        assert!(a  > 0.0, "ElasticBeam2d: A must be positive, got {a}");
-        assert!(iz > 0.0, "ElasticBeam2d: Iz must be positive, got {iz}");
+    ) -> Result<Self> {
+        if e <= 0.0 {
+            return Err(ElementError::InadmissibleSection {
+                element_type: "ElasticBeam2d",
+                parameter: "E",
+                value: e,
+                requirement: "E > 0",
+            });
+        }
+        
+        if a <= 0.0 {
+            return Err(ElementError::InadmissibleSection {
+                element_type: "ElasticBeam2d",
+                parameter: "A",
+                value: a,
+                requirement: "A > 0",
+            });
+        }
 
-        let transf = CoordTransf2d::from_nodes(x1, y1, x2, y2);
+        if iz <= 0.0 {
+            return Err(ElementError::InadmissibleSection {
+                element_type: "ElasticBeam2d",
+                parameter: "Iz",
+                value: iz,
+                requirement: "Iz > 0",
+            });
+        }
+
+        let transf = CoordTransf2d::from_nodes(x1, y1, x2, y2)?;
         let ke_local_cached = ke_local(e, a, iz, transf.length);
-        let material = ElasticUniaxial::new(e);
+        let material = ElasticUniaxial::new(e)?;
         // 2D frame: 3 DOFs per node
         let dof_map = DofMap::from_nodes(&[node1, node2], 3);
 
-        Self { dof_map, transf, material, a, iz, ke_local_cached }
+        Ok(Self { dof_map, transf, material, a, iz, ke_local_cached })
     }
 
     // ---- Geometry / section accessors ----
@@ -327,7 +351,7 @@ mod tests {
 
     fn cantilever() -> ElasticBeam2d {
         // 2m horizontal beam, steel-like properties
-        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, 200e9, 0.01, 1e-4)
+        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, 200e9, 0.01, 1e-4).unwrap()
     }
 
     // ---- Construction ----

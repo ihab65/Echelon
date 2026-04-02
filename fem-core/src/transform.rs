@@ -71,7 +71,7 @@ impl<T: SparseScalar> CoordTransf2d<T> {
         let dy = y2 - y1;
         let length = (dx * dx + dy * dy).scalar_sqrt();
         
-        if length.real_part() < 1e-14 {
+        if length.real_part() <= 0.0 {
             return Err(CoreError::DegenerateGeometry {
                 x1: x1.real_part(),
                 y1: y1.real_part(),
@@ -80,7 +80,7 @@ impl<T: SparseScalar> CoordTransf2d<T> {
                 length: length.real_part(),
             });
         }
-        
+
         Ok(Self {
             cos: dx / length,
             sin: dy / length,
@@ -92,13 +92,16 @@ impl<T: SparseScalar> CoordTransf2d<T> {
     ///
     /// Useful in tests or when the geometric properties are already computed.
     /// The caller is responsible for ensuring `cos² + sin² ≈ 1`.
-    pub fn from_cos_sin_length(cos: T, sin: T, length: T) -> Self {
-        debug_assert!(
-            (cos * cos + sin * sin - T::one()).abs().real_part() < 1e-10,
-            "CoordTransf2d: cos²+sin²={} ≠ 1",
-            cos * cos + sin * sin
-        );
-        Self { cos, sin, length }
+    pub fn from_cos_sin_length(cos: T, sin: T, length: T) -> Result<Self> {
+        let norm_sq = cos * cos + sin * sin;
+        let deviation = (norm_sq - T::one()).abs();
+        if deviation.real_part() > 1e-12 {
+            return Err(CoreError::NonOrthogonalTransform {
+                norm_sq: norm_sq.real_part(),
+                deviation: deviation.real_part(),
+            });
+        }
+        Ok(Self { cos, sin, length })
     }
 
     // -----------------------------------------------------------------

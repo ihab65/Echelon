@@ -15,6 +15,7 @@
 //! | 0     | `E`  | Young's modulus (Pa) |
 
 use crate::traits::{AdjointSensitive, SmoothUniaxial, UniaxialMaterial};
+use crate::error::{Result, MaterialError};
 use num_traits::{One, Zero};
 use std::ops::{Add, Mul};
 
@@ -43,9 +44,16 @@ pub struct ElasticUniaxial {
 
 impl ElasticUniaxial {
     /// Construct with elastic modulus `e` (Pa).
-    pub fn new(e: f64) -> Self {
-        assert!(e > 0.0, "ElasticUniaxial: modulus must be positive, got {e}");
-        Self { e, committed_strain: 0.0 }
+    pub fn new(e: f64) -> Result<Self> {
+        if e <= 0.0 {
+            return Err(MaterialError::InadmissibleParameter {
+                parameter: "E (Young's modulus)",
+                value: e,
+                requirement: "E > 0",
+            });
+        }
+
+        Ok(Self { e, committed_strain: 0.0 })
     }
 }
 
@@ -201,7 +209,7 @@ mod tests {
     use crate::traits::UniaxialMaterial;
 
     fn steel() -> ElasticUniaxial {
-        ElasticUniaxial::new(200e9)
+        ElasticUniaxial::new(200e9).unwrap()
     }
 
     // ---- UniaxialMaterial ----

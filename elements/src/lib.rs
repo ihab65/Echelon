@@ -46,12 +46,14 @@
 
 pub mod traits;
 pub mod local;
+pub mod error;
 mod elements;
 
 // ---- Flat re-exports: traits ----
 pub use traits::Element;
 pub use traits::DifferentiableElement;
 pub use traits::Assembleable;
+pub use error::ElementError;
 
 // ---- Flat re-exports: concrete elements ----
 pub use elements::Truss2d;

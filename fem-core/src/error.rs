@@ -74,10 +74,10 @@ pub enum CoreError {
         code(echelon::fem_core::topology::dof_map_overflow),
         help(
             "The global DOF index for node {node_id} evaluates to \
-             node_id × ndf + (ndf - 1) = {last_dof}, which exceeds the \
+             node_id x ndf + (ndf - 1) = {last_dof}, which exceeds the \
              total allocated DOF count ({n_dof}). \
              Ensure that the mesh node indices are 0-based and contiguous, \
-             and that `n_dof = n_nodes × ndf` was computed from the complete \
+             and that `n_dof = n_nodes x ndf` was computed from the complete \
              nodal set before assembling element DOF maps."
         )
     )]

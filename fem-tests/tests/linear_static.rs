@@ -112,7 +112,7 @@ fn truss2d_ke_local(ea_over_l: f64) -> [[f64; 4]; 4] {
 ///
 /// Computes `Kg = Tᵀ Ke_local T` using `fem_core::CoordTransf2d`.
 fn truss2d_ke_global(e: f64, a: f64, x1: f64, y1: f64, x2: f64, y2: f64) -> [f64; 16] {
-    let transf   = CoordTransf2d::from_nodes(x1, y1, x2, y2);
+    let transf   = CoordTransf2d::from_nodes(x1, y1, x2, y2).unwrap();
     let ke_local = truss2d_ke_local(e * a / transf.length);
     let ke_global = transf.transform_stiffness_4x4(&ke_local);
     // Flatten [[f64;4];4] → [f64;16] via mat_as_slice
@@ -163,7 +163,7 @@ fn beam2d_ke_local(e: f64, a: f64, iz: f64, l: f64) -> [[f64; 6]; 6] {
 /// 2D beam global stiffness as a flat `[f64; 36]` for `scatter_add`.
 fn beam2d_ke_global(e: f64, a: f64, iz: f64,
                     x1: f64, y1: f64, x2: f64, y2: f64) -> [f64; 36] {
-    let transf   = CoordTransf2d::from_nodes(x1, y1, x2, y2);
+    let transf   = CoordTransf2d::from_nodes(x1, y1, x2, y2).unwrap();
     let ke_local = beam2d_ke_local(e, a, iz, transf.length);
     let ke_global = transf.transform_stiffness_6x6(&ke_local);
     let slice = mat_as_slice(&ke_global);

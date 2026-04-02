@@ -29,6 +29,7 @@ use materials::UniaxialMaterial;
 
 use crate::local::truss::{axial_strain, f_int_global, stiffness_global};
 use crate::traits::{Assembleable, DifferentiableElement, Element};
+use crate::error::{Result, ElementError};
 
 // -----------------------------------------------------------------
 // Struct
@@ -82,18 +83,33 @@ impl Truss2d {
         x1: f64, y1: f64,
         x2: f64, y2: f64,
         e: f64, a: f64,
-    ) -> Self {
-        assert!(e > 0.0, "Truss2d: Young's modulus must be positive, got {e}");
-        assert!(a > 0.0, "Truss2d: area must be positive, got {a}");
+    ) -> Result<Self> {
+        if e <= 0.0 {
+            return Err(ElementError::InadmissibleSection {
+                element_type: "Truss2d",
+                parameter: "E (Young's modulus)",
+                value: e,
+                requirement: "must be > 0",
+            });
+        }
 
-        let transf   = CoordTransf2d::from_nodes(x1, y1, x2, y2);
-        let material = ElasticUniaxial::new(e);
+        if a <= 0.0 {
+            return Err(ElementError::InadmissibleSection {
+                element_type: "Truss2d",
+                parameter: "A (cross-section area)",
+                value: a,
+                requirement: "must be > 0",
+            });
+        }
+
+        let transf   = CoordTransf2d::from_nodes(x1, y1, x2, y2)?;
+        let material = ElasticUniaxial::new(e)?;
         let ea_over_l = e * a / transf.length;
 
         // 2D truss: 2 DOFs per node (ndf = 2)
         let dof_map = DofMap::from_nodes(&[node1, node2], 2);
 
-        Self { dof_map, transf, material, ea_over_l }
+        Ok(Self { dof_map, transf, material, ea_over_l })
     }
 
     // ---- Geometry accessors ----
@@ -252,12 +268,12 @@ mod tests {
 
     /// Horizontal truss element: E=200 GPa, A=0.01 m², L=2 m
     fn horizontal() -> Truss2d {
-        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, 200e9, 0.01)
+        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, 200e9, 0.01).unwrap()
     }
 
     /// 45° truss element: from (0,0) to (1,1)
     fn diagonal() -> Truss2d {
-        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 1.0, 1.0, 200e9, 0.01)
+        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 1.0, 1.0, 200e9, 0.01).unwrap()
     }
 
     // ---- Construction ----

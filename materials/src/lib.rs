@@ -46,6 +46,7 @@
 //! ```
 
 pub mod traits;
+pub mod error;
 mod materials;
 
 // ---- Flat re-exports ----
@@ -54,6 +55,7 @@ mod materials;
 pub use traits::UniaxialMaterial;
 pub use traits::AdjointSensitive;
 pub use traits::SmoothUniaxial;
+pub use error::MaterialError;
 
 // Concrete materials
 pub use materials::ElasticUniaxial;
