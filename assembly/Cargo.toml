@@ -1,0 +1,12 @@
+[package]
+name = "assembly"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror = { workspace = true }
+miette = { workspace = true }
+sparse    = { path = "../sparse" }
+fem_core  = { path = "../fem-core" }
+elements  = { path = "../elements" }
+materials = { path = "../materials" }

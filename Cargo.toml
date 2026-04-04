@@ -5,7 +5,8 @@ members = [
     "fem-core",
     "fem-tests", 
     "materials",
-    "elements"
+    "elements", 
+    "assembly"
 ]
 
 # In the root Cargo.toml
