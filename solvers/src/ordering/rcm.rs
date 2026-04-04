@@ -289,9 +289,10 @@ mod tests {
     // ---- fill helper ----
 
     fn nnz_l<T>(m: &SymCsrMatrix<T>) -> usize where T: SparseScalar {
-        use crate::cholesky::symbolic::analyze;
-        use sparse::convert::sym_to_csc;
-        analyze(&sym_to_csc(m)).unwrap().nnz_l()
+        use crate::LinearSolver;
+        let mut solver = crate::cholesky::SparseSolver::<T>::new();
+        solver.analyze(&m).unwrap();
+        solver.symbolic.as_ref().unwrap().nnz_l()
     }
 
     // ================================================================
@@ -585,14 +586,14 @@ mod tests {
 
     #[test]
     fn permute_and_solve_invariant_path() {
-        use crate::cholesky::SparseSolver;
+        use crate::{LinearSolver, CholeskySolver};
 
         let n = 30;
         let (_, m) = path_graph(n);
         let f: Vec<f64> = (0..n).map(|i| ((i + 1) as f64).sin()).collect();
 
         // Solve without permutation
-        let mut solver = SparseSolver::new();
+        let mut solver = CholeskySolver::new();
         solver.analyze_and_factorize(&m).unwrap();
         let mut u1 = vec![0.0_f64; n];
         solver.solve(&f, &mut u1).unwrap();
@@ -600,7 +601,7 @@ mod tests {
         // Solve with RCM permutation applied internally
         let g    = Graph::from_sym(&m);
         let perm = rcm(&g);
-        let mut solver2 = SparseSolver::new();
+        let mut solver2 = CholeskySolver::new();
         solver2.set_ordering(crate::ordering::Ordering::Custom(perm));
         solver2.analyze_and_factorize(&m).unwrap();
         let mut u2 = vec![0.0_f64; n];
@@ -614,20 +615,20 @@ mod tests {
 
     #[test]
     fn permute_and_solve_invariant_grid() {
-        use crate::cholesky::SparseSolver;
+        use crate::{LinearSolver, CholeskySolver};
 
         let k = 6;
         let (g, m) = grid_laplacian(k);
         let n = k * k;
         let f: Vec<f64> = (0..n).map(|i| ((i + 1) as f64).sin()).collect();
 
-        let mut solver1 = SparseSolver::new();
+        let mut solver1 = CholeskySolver::new();
         solver1.analyze_and_factorize(&m).unwrap();
         let mut u1 = vec![0.0_f64; n];
         solver1.solve(&f, &mut u1).unwrap();
 
         let perm = rcm(&g);
-        let mut solver2 = SparseSolver::new();
+        let mut solver2 = CholeskySolver::new();
         solver2.set_ordering(crate::ordering::Ordering::Custom(perm));
         solver2.analyze_and_factorize(&m).unwrap();
         let mut u2 = vec![0.0_f64; n];

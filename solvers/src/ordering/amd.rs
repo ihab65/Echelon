@@ -398,8 +398,8 @@ mod tests {
     // ================================================================
 
     fn solve_with_perm(k: &SymCsrMatrix<f64>, f: &[f64], perm: Permutation) -> Vec<f64> {
-        use crate::cholesky::SparseSolver;
-        let mut solver = SparseSolver::new();
+        use crate::{LinearSolver, CholeskySolver};
+        let mut solver = CholeskySolver::<f64>::new();
         solver.set_ordering(crate::ordering::Ordering::Custom(perm));
         solver.analyze_and_factorize(k).unwrap();
         let mut u = vec![0.0_f64; f.len()];
@@ -408,8 +408,8 @@ mod tests {
     }
 
     fn solve_natural(k: &SymCsrMatrix<f64>, f: &[f64]) -> Vec<f64> {
-        use crate::cholesky::SparseSolver;
-        let mut solver = SparseSolver::new();
+        use crate::{LinearSolver, CholeskySolver};
+        let mut solver = CholeskySolver::<f64>::new();
         solver.set_ordering(crate::ordering::Ordering::Natural);
         solver.analyze_and_factorize(k).unwrap();
         let mut u = vec![0.0_f64; f.len()];

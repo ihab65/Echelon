@@ -1,6 +1,6 @@
 //! Integration tests for the Cholesky factorization pipeline.
 //!
-//! Tests the symbolic phase through the public `SparseSolver` interface
+//! Tests the symbolic phase through the public `CholeskySolver` interface
 //! and directly through `symbolic::analyze`.
 
 use solvers::cholesky::symbolic::analyze;
@@ -56,13 +56,13 @@ fn symbolic_diagonal_entries_present_in_all_columns() {
     }
 }
 
-// ---- SparseSolver interface ----
+// ---- CholeskySolver interface ----
 
 #[test]
 fn sparse_solver_analyze_then_factorize_error() {
-    use solvers::{cholesky::SparseSolver, SolverError};
+    use solvers::{LinearSolver, CholeskySolver, SolverError};
     let k = tridiag(4);
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::<f64>::new();
     // factorize before analyze should error
     assert!(matches!(
         solver.factorize(&k).unwrap_err(),
@@ -75,9 +75,9 @@ fn sparse_solver_analyze_then_factorize_error() {
 
 #[test]
 fn sparse_solver_solve_before_factorize_errors() {
-    use solvers::{cholesky::SparseSolver, SolverError};
+    use solvers::{LinearSolver, CholeskySolver, SolverError};
     let k = tridiag(3);
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::<f64>::new();
     solver.analyze(&k).unwrap();
     // factorize not called yet
     let mut u = vec![0.0; 3];

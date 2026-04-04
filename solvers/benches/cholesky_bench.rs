@@ -5,6 +5,7 @@ use criterion::{
 };
 use sparse::{CooBuilder, SymCsrMatrix};
 use solvers::cholesky::SparseSolver;
+use solvers::LinearSolver;
 
 // =============================================================================
 // Matrix builders

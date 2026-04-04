@@ -26,7 +26,8 @@
 //!   ~1e12 introduces.
 
 use sparse::{CooBuilder, SymCsrMatrix};
-use solvers::cholesky::SparseSolver;
+use solvers::LinearSolver;
+use solvers::CholeskySolver;
 use solvers::SolverError;
 
 // =============================================================================
@@ -101,9 +102,9 @@ fn relative_residual(a: &SymCsrMatrix<f64>, f: &[f64], u: &[f64]) -> f64 {
         / norm_f
 }
 
-/// Solve `Au = f` with the full `SparseSolver` pipeline and return `u`.
+/// Solve `Au = f` with the full `CholeskySolver` pipeline and return `u`.
 fn full_solve(a: &SymCsrMatrix<f64>, f: &[f64]) -> Vec<f64> {
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze_and_factorize(a).unwrap();
     let mut u = vec![0.0_f64; f.len()];
     solver.solve(f, &mut u).unwrap();
@@ -329,12 +330,12 @@ fn b6_laplacian_rcm_validity_and_correctness() {
     // Solve with natural (identity) ordering
     let u_natural = full_solve(&k, &f);
 
-    // Solve with RCM ordering via the high-level SparseSolver API
+    // Solve with RCM ordering via the high-level CholeskySolver API
     // (which handles the permutation internally — no manual permute needed)
     let u_rcm = {
-        use solvers::cholesky::SparseSolver;
+        use solvers::linear::cholesky::CholeskySolver;
         
-        let mut solver = SparseSolver::new();
+        let mut solver = CholeskySolver::new();
         solver.set_ordering(solvers::ordering::Ordering::Custom(perm.clone()));
         solver.analyze_and_factorize(&k).unwrap();
         let mut u = vec![0.0_f64; n];
@@ -435,7 +436,7 @@ fn b7_laplacian_rcm_helps_on_badly_ordered_mesh() {
     // We must permute f accordingly and then unpermute the solution.
     let f_natural = rhs_sin(n);
 
-    // Solve k_natural u = f directly (SparseSolver handles its own ordering)
+    // Solve k_natural u = f directly (CholeskySolver handles its own ordering)
     let u_natural = full_solve(&k_natural, &f_natural);
 
     // Permute RHS into the bad ordering's DOF space: f_bad[i] = f_natural[bad_perm[i]]
@@ -624,7 +625,7 @@ fn d1_near_zero_diagonal_single_dof() {
     }
     let a = coo.build_sym().unwrap();
 
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze(&a).unwrap();
     let result = solver.factorize(&a);
 
@@ -662,7 +663,7 @@ fn d2_explicitly_indefinite_matrix() {
     coo.add(2, 2, -1.0);  // negative diagonal
     let a = coo.build_sym().unwrap();
 
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze(&a).unwrap();
     assert!(
         matches!(solver.factorize(&a), Err(SolverError::NotPositiveDefinite { .. })),
@@ -680,7 +681,7 @@ fn d3_singular_matrix_rank_deficient() {
     coo.add(1, 1, 1.0);
     let a = coo.build_sym().unwrap();
 
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze(&a).unwrap();
     assert!(
         matches!(solver.factorize(&a), Err(SolverError::NotPositiveDefinite { .. })),
@@ -715,7 +716,7 @@ fn d4_weak_spring_structural_singularity() {
     }
     let a = coo.build_sym().unwrap();
 
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze(&a).unwrap();
 
     match solver.factorize(&a) {
@@ -752,7 +753,7 @@ fn e1_repeated_factorize_diagonal_scaling() {
 
     // Build the sparsity pattern once (for scale=1.0)
     let k_pattern = spring_chain(n, 1.0);
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze(&k_pattern).unwrap();
 
     let scales = [1.0_f64, 2.0, 4.0, 8.0, 16.0];
@@ -807,7 +808,7 @@ fn e2_repeated_factorize_laplacian_shifts() {
     // The sparsity pattern is the same for all shifts: use the unshifted matrix
     // for symbolic analysis.
     let base = laplacian_2d(nx, ny);
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze(&base).unwrap();
 
     let shifts = [0.0_f64, 1e-4, 1e-2, 1.0, 10.0];
@@ -841,7 +842,7 @@ fn e2_repeated_factorize_laplacian_shifts() {
 #[test]
 fn e3_reanalyze_invalidates_numeric() {
     let k = spring_chain(50, 1.0);
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze_and_factorize(&k).unwrap();
 
     // Re-analyze: this must invalidate the numeric factor.
@@ -868,7 +869,7 @@ fn e4_twenty_newton_iterations_same_topology() {
 
     // Analyze once
     let k_base = spring_chain(n, 1.0);
-    let mut solver = SparseSolver::new();
+    let mut solver = CholeskySolver::new();
     solver.analyze(&k_base).unwrap();
 
     // Factorize 20 times with slightly perturbed stiffness (same pattern)
@@ -933,7 +934,7 @@ fn e5_alternating_topology() {
             coo.build_sym().unwrap()
         };
 
-        let mut solver = SparseSolver::new();
+        let mut solver = CholeskySolver::new();
         solver.analyze_and_factorize(&k).unwrap();
         let mut u = vec![0.0_f64; n];
         solver.solve(&f, &mut u).unwrap();

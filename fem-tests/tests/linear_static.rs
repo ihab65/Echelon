@@ -48,6 +48,7 @@
 //! avoid false failures from floating-point rounding in the reference formula.
 
 use sparse::{CooBuilder, SymCsrMatrix};
+use solvers::LinearSolver;
 use solvers::cholesky::SparseSolver;
 use fem_core::{CoordTransf2d, DofMap, NodeId};
 use fem_core::dense::{mat_as_slice, mat_zero};
