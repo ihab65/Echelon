@@ -6,8 +6,16 @@ members = [
     "fem-tests", 
     "materials",
     "elements", 
-    "assembly"
+    "assembly", 
+    "analysis"
 ]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Dahel Ihab Eddine <ihg.bk65@gmail.com>"]
+edition = "2024"
+repository = "https://github.com/ihab65/echelon"
+description = "A high-performance, stateless finite element analysis framework."
 
 [workspace.dependencies]
 thiserror = "1.0"

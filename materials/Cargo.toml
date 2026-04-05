@@ -1,7 +1,10 @@
 [package]
-name    = "materials"
-version = "0.1.0"
-edition = "2024"
+name = "materials"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+description.workspace = true
 
 [dependencies]
 thiserror = { workspace = true }

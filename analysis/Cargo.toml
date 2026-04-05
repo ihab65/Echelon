@@ -1,0 +1,22 @@
+[package]
+name = "analysis"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+miette    = { workspace = true }
+assembly  = { path = "../assembly" }
+solvers   = { path = "../solvers" }
+sparse    = { path = "../sparse" }
+
+[dev-dependencies]
+assembly  = { path = "../assembly" }
+elements  = { path = "../elements" }
+materials = { path = "../materials" }
+fem_core  = { path = "../fem-core" }
+sparse    = { path = "../sparse" }
+solvers   = { path = "../solvers" }

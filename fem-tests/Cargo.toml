@@ -1,7 +1,10 @@
 [package]
-name    = "fem-tests"
-version = "0.1.0"
-edition = "2024"
+name = "fem-tests"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+description.workspace = true
 
 # This crate has no library — it exists purely to hold integration tests
 # that exercise the full sparse → solvers → fem_core pipeline against
