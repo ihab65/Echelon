@@ -16,7 +16,9 @@
 mod element;
 mod differentiable;
 mod assembleable;
+mod element_load;
 
 pub use element::Element;
 pub use differentiable::DifferentiableElement;
 pub use assembleable::Assembleable;
+pub use element_load::ElementLoadParams;

@@ -170,6 +170,19 @@ impl ElasticBeam2d {
         kg_flat.copy_from_slice(mat_as_slice(&kg_arr));
         kg_flat
     }
+
+    /// Rotate a local 6-DOF force vector to global coordinates: `f_global = Tᵀ f_local`.
+    fn rotate_to_global(&self, f_local: &[f64; 6]) -> Vec<f64> {
+        let t = self.transf.t_matrix_6x6();
+        let mut fg = [0.0_f64; 6];
+        for i in 0..6 {
+            for j in 0..6 {
+                // Tᵀ[i,j] = T[j,i]
+                fg[i] += t[j][i] * f_local[j];
+            }
+        }
+        fg.to_vec()
+    }
 }
 
 // -----------------------------------------------------------------
@@ -242,6 +255,104 @@ impl Element for ElasticBeam2d {
     }
 
     fn type_name(&self) -> &'static str { "ElasticBeam2d" }
+
+    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams) -> Vec<f64> {
+        use crate::traits::ElementLoadParams;
+
+        let l  = self.transf.length;
+        let l2 = l * l;
+        let l3 = l2 * l;
+
+        // All formulas produce forces in LOCAL coordinates:
+        //   [N_i, V_i, M_i, N_j, V_j, M_j]
+        // where N = axial, V = shear, M = moment (CCW positive).
+        //
+        // These are the forces the load applies TO THE NODES (not the
+        // fixed-end reactions — we keep the sign that loads the structure).
+        //
+        // The load components (wx, wy) are in GLOBAL coordinates, so we must
+        // project them onto the local axes before applying the FER formulas.
+        let c = self.transf.cos;
+        let s = self.transf.sin;
+
+        let f_local: [f64; 6] = match *params {
+            ElementLoadParams::Uniform { wx, wy } => {
+                // Project global (wx, wy) onto local (axial x_L, transverse y_L).
+                // Local x-axis: (c, s);  local y-axis: (-s, c)
+                let wx_l = wx * c + wy * s;   // axial component
+                let wy_l = -wx * s + wy * c;  // transverse component
+
+                let n = wx_l * l / 2.0;
+                let v = wy_l * l / 2.0;
+                let m = wy_l * l2 / 12.0;
+
+                [n, v, m, n, v, -m]
+            }
+
+            ElementLoadParams::Point { px, py, xi } => {
+                let xi = xi.clamp(0.0, 1.0);
+                let a  = xi * l;         // distance from node I
+                let b  = l - a;          // distance from node J
+
+                // Project to local frame
+                let px_l =  px * c + py * s;
+                let py_l = -px * s + py * c;
+
+                // Axial: simple lever-arm interpolation
+                let n_i = px_l * (b / l);
+                let n_j = px_l * (a / l);
+
+                // Transverse: Euler-Bernoulli fixed-end reactions
+                let v_i = py_l * (b * b * (3.0 * a + b)) / l3;
+                let v_j = py_l * (a * a * (a + 3.0 * b)) / l3;
+
+                // Moments (CCW positive)
+                let m_i =  py_l * (a * b * b) / l2;
+                let m_j = -py_l * (a * a * b) / l2;
+
+                [n_i, v_i, m_i, n_j, v_j, m_j]
+            }
+
+            ElementLoadParams::Trapezoidal { wx_i, wx_j, wy_i, wy_j } => {
+                // Project both endpoints to local frame
+                let wx_l_i =  wx_i * c + wy_i * s;
+                let wy_l_i = -wx_i * s + wy_i * c;
+                let wx_l_j =  wx_j * c + wy_j * s;
+                let wy_l_j = -wx_j * s + wy_j * c;
+
+                // Axial: trapezoidal rule
+                let dwx = wx_l_j - wx_l_i;
+                let n_i = wx_l_i * l / 2.0 + dwx * l / 6.0;
+                let n_j = wx_l_i * l / 2.0 + dwx * l / 3.0;
+
+                // Transverse: superpose uniform (at wy_l_i) + triangular (Δwy)
+                let dwy = wy_l_j - wy_l_i;
+
+                // Uniform part (magnitude wy_l_i)
+                let v_i_u =  wy_l_i * l  / 2.0;
+                let v_j_u =  wy_l_i * l  / 2.0;
+                let m_i_u =  wy_l_i * l2 / 12.0;
+                let m_j_u = -wy_l_i * l2 / 12.0;
+
+                // Triangular part (peaking at node J with magnitude dwy)
+                let v_i_t =  dwy * 3.0 * l  / 20.0;
+                let v_j_t =  dwy * 7.0 * l  / 20.0;
+                let m_i_t =  dwy * l2        / 30.0;
+                let m_j_t = -dwy * l2        / 20.0;
+
+                [
+                    n_i,
+                    v_i_u + v_i_t,
+                    m_i_u + m_i_t,
+                    n_j,
+                    v_j_u + v_j_t,
+                    m_j_u + m_j_t,
+                ]
+            }
+        };
+
+        self.rotate_to_global(&f_local)
+    }
 }
 
 // -----------------------------------------------------------------

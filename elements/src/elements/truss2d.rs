@@ -182,6 +182,47 @@ impl Element for Truss2d {
     }
 
     fn type_name(&self) -> &'static str { "Truss2d" }
+
+    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams) -> Vec<f64> {
+        use crate::traits::ElementLoadParams;
+
+        let l = self.transf.length;
+        let c = self.transf.cos;
+        let s = self.transf.sin;
+
+        // Trusses resist only axial force. Project the load onto the local
+        // axis and apply simple lever-arm interpolation. Transverse components
+        // produce zero axial force and are silently ignored — a transverse
+        // load on a pin-ended truss member is not physically meaningful.
+        match *params {
+            ElementLoadParams::Uniform { wx, wy } => {
+                // Axial projection: wx_local = wx·cos + wy·sin
+                let wx_l = wx * c + wy * s;
+                let n    = wx_l * l / 2.0;
+                // Global force vector: [-c, -s] at node I, [c, s] at node J
+                vec![-n * c, -n * s, n * c, n * s]
+            }
+
+            ElementLoadParams::Point { px, py, xi } => {
+                let xi   = xi.clamp(0.0, 1.0);
+                let a    = xi * l;
+                let b    = l - a;
+                let px_l = px * c + py * s; // axial projection
+                let n_i  = px_l * (b / l);
+                let n_j  = px_l * (a / l);
+                vec![-n_i * c, -n_i * s, n_j * c, n_j * s]
+            }
+
+            ElementLoadParams::Trapezoidal { wx_i, wx_j, wy_i, wy_j } => {
+                let wx_l_i = wx_i * c + wy_i * s;
+                let wx_l_j = wx_j * c + wy_j * s;
+                let dwx    = wx_l_j - wx_l_i;
+                let n_i    = wx_l_i * l / 2.0 + dwx * l / 6.0;
+                let n_j    = wx_l_i * l / 2.0 + dwx * l / 3.0;
+                vec![-n_i * c, -n_i * s, n_j * c, n_j * s]
+            }
+        }
+    }
 }
 
 // -----------------------------------------------------------------

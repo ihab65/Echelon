@@ -84,4 +84,20 @@ pub trait Element: Send + Sync {
 
     /// Human-readable element type name for diagnostics.
     fn type_name(&self) -> &'static str;
+
+        /// Compute the statically equivalent global nodal forces for an applied
+    /// element load (fixed-end reactions, reversed to act on the nodes).
+    ///
+    /// The returned vector has length `n_dof()` and is in global coordinates.
+    /// For element types that do not support the requested load (e.g., a truss
+    /// receiving a transverse distributed load with no transverse stiffness),
+    /// the implementation should return a zero vector rather than panic.
+    ///
+    /// # Default implementation
+    ///
+    /// Returns a zero vector. Override in elements that carry distributed loads.
+    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams) -> Vec<f64> {
+        let _ = params;
+        vec![0.0; self.n_dof()]
+    }
 }
