@@ -174,14 +174,18 @@ impl Model {
     /// present in `self.nodes`. Validation happens lazily at assembly time
     /// (via `DofMap::validate_against`) rather than here, to avoid the cost
     /// of checking every element at add-time in population runs.
-    pub fn add_element(&mut self, element: Box<dyn Assembleable>) {
+    pub fn add_element(&mut self, element: Box<dyn Assembleable>) -> usize {
+        let id = self.elements.len();
         self.elements.push(element);
+        id
     }
 
     /// Convenience wrapper: add an element from any concrete type that
     /// implements `Assembleable`.
-    pub fn add_element_typed<E: Assembleable + 'static>(&mut self, element: E) {
+    pub fn add_element_typed<E: Assembleable + 'static>(&mut self, element: E) -> usize {
+        let id = self.elements.len();
         self.elements.push(Box::new(element));
+        id
     }
 
     /// Add a Dirichlet boundary condition.
