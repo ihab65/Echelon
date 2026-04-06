@@ -38,9 +38,11 @@ pub mod internal;
 pub mod mass;
 pub mod external;
 pub mod adjoint;
+pub mod damping;
 
 pub use stiffness::assemble_stiffness;
 pub use internal::assemble_internal_force;
 pub use mass::{assemble_mass, assemble_self_weight};
 pub use external::assemble_load_vector;
 pub use adjoint::{assemble_partial_residual, total_n_params};
+pub use damping::{build_rayleigh_damping, rayleigh_coefficients};

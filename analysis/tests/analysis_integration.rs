@@ -47,12 +47,7 @@ use fem_core::{ModelDim, NodeId};
 use materials::ElasticUniaxial;
 use elements::{Truss2d, ElasticBeam2d};
 use assembly::{
-    Model, Node,
-    constraints::SpConstraint,
-    loads::{NodalLoad, ConstantSeries},
-    build_pattern,
-    assemble_stiffness,
-    assemble_mass
+    LinearSeries, Model, Node, assemble_mass, assemble_stiffness, build_pattern, constraints::SpConstraint, loads::{ConstantSeries, NodalLoad}
 };
 
 use analysis::algorithms::newton::NewtonRaphson;
@@ -932,4 +927,193 @@ fn test_bake_load_and_clear() {
 
     model.clear_baked_loads();
     assert!(!model.has_baked_loads());
+}
+
+// =============================================================================
+// TEST 19 — echelon_model! macro builds a valid model
+// =============================================================================
+#[test]
+fn test_echelon_model_macro() {
+    use assembly::echelon_model;
+
+    let model = echelon_model! {
+        nodes: [
+            { id: 0, x: 0.0, y: 0.0 },
+            { id: 1, x: 2.0, y: 0.0 },
+        ],
+        materials: [
+            { id: steel, E: 200e9 },
+        ],
+        elements: [
+            { type: Beam2d, nodes: [0, 1], mat: steel, A: 0.01, Iz: 1e-4 },
+        ],
+    };
+
+    assert_eq!(model.n_nodes(), 2);
+    assert_eq!(model.n_elements(), 1);
+    assert_eq!(model.n_dof(), 6);
+}
+
+// =============================================================================
+// TEST 20 — NodeRecorder captures pushover curve
+// =============================================================================
+#[test]
+fn test_node_recorder_pushover() {
+    use analysis::algorithms::newton::NewtonRaphson;
+    use analysis::convergence::unbalance::NormUnbalance;
+    use analysis::drivers::nonlinear_static::StaticNonlinear;
+    use analysis::drivers::AnalysisDriver;
+    use analysis::integrators::statics::load_control::LoadControl;
+    use analysis::recorder::NodeRecorder;
+
+    let e = 200e9_f64; let iz = 1e-4_f64; let a = 0.01_f64; let l = 2.0_f64;
+    let p = 1e3_f64;
+
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l, 0.0)).unwrap();
+    model.add_element_typed(
+        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
+            ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
+    );
+    let ndf = 3;
+    for dof in 0..ndf {
+        model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
+    }
+    model.add_load_typed(NodalLoad {
+        node_id: NodeId(1),
+        reference_loads: vec![0.0, -p, 0.0],
+        series: Box::new(LinearSeries),
+    });
+    model.build_state();
+
+    let test = Box::new(NormUnbalance::new(1e-8));
+    let algorithm = Box::new(NewtonRaphson::new(test, 25));
+    let integrator = Box::new(LoadControl::new(0.1)); // 10 × Δλ = 0.1
+
+    let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
+    driver.add_recorder(Box::new(NodeRecorder::single(4, "tip_uy")));
+    assert!(driver.analyze(&mut model, 10).unwrap());
+
+    let rec = driver.recorder_as::<NodeRecorder>(0).unwrap();
+
+    // 10 steps → 10 recorded values
+    assert_eq!(rec.times().len(), 10);
+    assert_eq!(rec.data().len(), 10);
+
+    // Values must be monotonically increasing in magnitude (linear elastic pushover)
+    let tips = rec.flatten();
+    for i in 1..tips.len() {
+        assert!(tips[i].abs() > tips[i-1].abs(),
+            "tip displacement should increase monotonically: {tips:?}");
+    }
+
+    // Final value must match the closed-form full-load deflection
+    let v_full = -p * l.powi(3) / (3.0 * e * iz);
+    assert_rel(tips[9], v_full, 1e-9, "recorder final value vs analytical");
+}
+
+// =============================================================================
+// TEST 21 — compute_reactions: cantilever base shear and moment
+//
+// Cantilever with tip load P = 10 kN, length L = 2 m.
+//   Base shear   = P       = 10 kN (vertical, upward at base)
+//   Base moment  = P * L   = 20 kN·m (CCW at base)
+// =============================================================================
+#[test]
+fn test_compute_reactions_cantilever() {
+    use analysis::algorithms::newton::NewtonRaphson;
+    use analysis::convergence::unbalance::NormUnbalance;
+    use analysis::drivers::nonlinear_static::StaticNonlinear;
+    use analysis::drivers::AnalysisDriver;
+    use analysis::integrators::statics::load_control::LoadControl;
+
+    let e = 200e9_f64; let iz = 1e-4_f64; let a = 0.01_f64;
+    let l = 2.0_f64; let p = 10e3_f64;
+
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l, 0.0)).unwrap();
+    model.add_element_typed(
+        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
+            ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
+    );
+    let ndf = 3;
+    for dof in 0..ndf {
+        model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
+    }
+    model.add_load_typed(NodalLoad {
+        node_id: NodeId(1),
+        reference_loads: vec![0.0, -p, 0.0],
+        series: Box::new(ConstantSeries),
+    });
+    model.build_state();
+
+    let mut driver = StaticNonlinear::new(
+        Box::new(NewtonRaphson::new(Box::new(NormUnbalance::new(1e-8)), 25)),
+        Box::new(LoadControl::new(1.0)),
+        &model,
+    ).unwrap();
+    assert!(driver.analyze(&mut model, 1).unwrap());
+
+    model.compute_reactions();
+    let r = model.reactions.clone();
+
+    // Node 0 DOFs: UX=0, UY=1, RZ=2
+    // Base shear (UY, DOF 1): must equal +P (upward reaction)
+    assert_rel(r[1],  p,       1e-6, "base shear UY");
+    // Base moment (RZ, DOF 2): must equal +P*L (CCW reaction to CW load)
+    assert_rel(r[2],  p * l,   1e-6, "base moment RZ");
+    // Axial reaction (UX, DOF 0): must be ~0 (no horizontal load)
+    assert!(r[0].abs() < 1e-3 * p, "axial reaction should be ~0: {}", r[0]);
+
+    // Free DOFs (node 1) must be zero
+    assert_eq!(r[3], 0.0);
+    assert_eq!(r[4], 0.0);
+    assert_eq!(r[5], 0.0);
+}
+
+// =============================================================================
+// TEST 22 — build_rayleigh_damping: C = α·M + β·K
+// =============================================================================
+#[test]
+fn test_build_rayleigh_damping() {
+    use assembly::{build_pattern, assemble_mass, assemble_stiffness,
+                   build_rayleigh_damping};
+
+    let e = 200e9_f64; let a = 0.01_f64; let l = 2.0_f64;
+
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l, 0.0)).unwrap();
+    model.add_element_typed(
+        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
+            ElasticUniaxial::new(e, Some(7850.0)).unwrap(), a, 1e-4).unwrap()
+    );
+    model.build_state();
+
+    let k_pat = build_pattern(&model).unwrap();
+    let mut mass = k_pat.clone();
+    assemble_mass(&model, &mut mass).unwrap();
+
+    let mut stiff = k_pat.clone();
+    assemble_stiffness(&model, &mut stiff).unwrap();
+
+    let alpha_m = 0.5_f64;
+    let beta_k  = 0.001_f64;
+
+    let c = build_rayleigh_damping(&mass, &stiff, alpha_m, beta_k).unwrap();
+    c.validate().unwrap();
+
+    // Spot check: C[i,j] = alpha_m * M[i,j] + beta_k * K[i,j]
+    for row in 0..6 {
+        for col in row..6 {
+            let m_val = mass.get(row, col).unwrap();
+            let k_val = stiff.get(row, col).unwrap();
+            let c_val = c.get(row, col).unwrap();
+            let expected = alpha_m * m_val + beta_k * k_val;
+            assert!((c_val - expected).abs() < 1e-6,
+                "C[{row},{col}]={c_val:.6e} expected {expected:.6e}");
+        }
+    }
 }

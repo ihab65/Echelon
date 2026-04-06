@@ -117,3 +117,5 @@ pub use algorithms::EquiSolnAlgo;
 pub use integrators::Integrator;
 pub use drivers::AnalysisDriver;
 pub use recorder::Recorder;
+pub use recorder::NodeRecorder;
+pub use recorder::ElementRecorder;

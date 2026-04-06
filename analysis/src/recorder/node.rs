@@ -86,6 +86,8 @@ impl Recorder for NodeRecorder {
     fn description(&self) -> String {
         format!("NodeRecorder[{}] dofs={:?}", self.label, self.dofs)
     }
+    fn as_any(&self) -> &dyn std::any::Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
 }
 
 // -----------------------------------------------------------------

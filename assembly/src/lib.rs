@@ -144,6 +144,7 @@ pub use loads::pattern::{LoadPattern, NodalLoad, ElementLoad};
 pub use loads::series::{TimeSeries, ConstantSeries, LinearSeries, PathSeries};
 pub use loads::combo::LoadCombo;
 pub use loads::gravity::GravityLoad;
+pub use loads::seismic::{GroundMotion, UniformExcitation};
 
 // All five builder functions
 pub use builders::{
@@ -154,6 +155,8 @@ pub use builders::{
     assemble_load_vector,
     assemble_partial_residual,
     total_n_params,
+    build_rayleigh_damping, 
+    rayleigh_coefficients
 };
 
 // Error type

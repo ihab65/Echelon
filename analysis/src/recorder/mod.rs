@@ -44,6 +44,7 @@ pub use node::NodeRecorder;
 pub use element::ElementRecorder;
 
 use assembly::Model;
+use std::any::Any;
 
 // -----------------------------------------------------------------
 // Recorder trait
@@ -64,4 +65,7 @@ pub trait Recorder: Send + Sync {
 
     /// Human-readable description of what this recorder captures.
     fn description(&self) -> String;
+    /// For downcasting to concrete recorder types after analysis.
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

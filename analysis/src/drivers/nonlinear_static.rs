@@ -162,6 +162,15 @@ impl StaticNonlinear {
     pub fn recorder(&self, index: usize) -> Option<&dyn crate::recorder::Recorder> {
         self.recorders.get(index).map(|r| r.as_ref())
     }
+
+    /// Access a recorder by index, downcast to the concrete type `R`.
+    ///
+    /// Returns `None` if the index is out of range or the type doesn't match.
+    pub fn recorder_as<R: crate::recorder::Recorder + 'static>(&self, index: usize)
+        -> Option<&R>
+    {
+        self.recorders.get(index)?.as_any().downcast_ref::<R>()
+    }
 }
 
 impl AnalysisDriver for StaticNonlinear {
