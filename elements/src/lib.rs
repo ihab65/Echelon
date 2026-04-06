@@ -53,6 +53,7 @@ mod elements;
 pub use traits::Element;
 pub use traits::DifferentiableElement;
 pub use traits::Assembleable;
+pub use traits::ElementLoadParams;
 pub use error::ElementError;
 
 // ---- Flat re-exports: concrete elements ----

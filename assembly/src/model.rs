@@ -127,6 +127,11 @@ pub struct Model {
     /// before adding the active load patterns. This replicates OpenSees's
     /// `loadConst` / `setLoadConst` pattern without any global state.
     pub p_base: Option<Vec<f64>>,
+
+    /// Support reactions at constrained DOFs, populated by [`compute_reactions`].
+    ///
+    /// Empty until [`compute_reactions`] is called after a converged step.
+    pub reactions: Vec<f64>,
 }
 
 impl Model {
@@ -144,6 +149,7 @@ impl Model {
             loads:       Vec::new(),
             u_global:    Vec::new(),
             p_base:      None,
+            reactions:   Vec::new(),
         }
     }
 
@@ -341,6 +347,61 @@ impl Model {
         for (i, load) in self.loads.iter().enumerate() {
             print!("{}", load.format_tree("  ", i == n - 1));
         }
+    }
+
+    /// Compute support reactions at all constrained DOFs.
+    ///
+    /// After a converged analysis step, the reaction at a constrained DOF is
+    /// the internal resisting force that the structure exerts on the support.
+    /// It equals the sum of all element internal-force contributions at that
+    /// DOF, evaluated at the current `u_global`.
+    ///
+    /// The result is stored in `self.reactions` and also returned as a slice
+    /// reference for immediate use.
+    ///
+    /// # Calculation
+    ///
+    /// `R = F_int(u) |_{constrained DOFs}`
+    ///
+    /// where `F_int` is the global internal force vector assembled from all
+    /// elements at the current displacement state.
+    ///
+    /// # Panics
+    /// Panics if `build_state` has not been called (i.e. `u_global` is empty).
+    pub fn compute_reactions(&mut self) -> &[f64] {
+        let n = self.n_dof();
+        self.reactions.resize(n, 0.0);
+        self.reactions.fill(0.0);
+
+        // Assemble F_int from all elements
+        for element in &self.elements {
+            let dof_map = element.dof_map();
+            let u_local: Vec<f64> = dof_map
+                .as_usize_slice()
+                .iter()
+                .map(|&g| self.u_global[g])
+                .collect();
+            let f_int = element.f_int(&u_local);
+            for (local_i, &global_dof) in dof_map.as_usize_slice().iter().enumerate() {
+                self.reactions[global_dof] += f_int[local_i];
+            }
+        }
+
+        // Zero out unconstrained DOFs — reactions only exist at supports
+        // Build a mask of constrained DOFs
+        let mut is_constrained = vec![false; n];
+        for c in &self.constraints {
+            if c.global_dof < n {
+                is_constrained[c.global_dof] = true;
+            }
+        }
+        for (r, &constrained) in self.reactions.iter_mut().zip(is_constrained.iter()) {
+            if !constrained {
+                *r = 0.0;
+            }
+        }
+
+        &self.reactions
     }
 
     // -----------------------------------------------------------------
