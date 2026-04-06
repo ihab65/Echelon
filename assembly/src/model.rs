@@ -229,52 +229,118 @@ impl Model {
     }
 
     // -----------------------------------------------------------------
-    // Load locking
+    // Load baking — Phase 4
     // -----------------------------------------------------------------
 
-    /// Bake the current active loads at `pseudo_time` into `p_base` and
-    /// clear the active load queue for the next analysis phase.
+    /// Bake a specific load pattern permanently into the pre-load vector.
     ///
-    /// This replicates OpenSees's `loadConst` pattern: after calling this,
-    /// `assemble_load_vector` will always seed `f_ext` with `p_base`
-    /// (the gravity / pre-load vector) before layering the new phase's loads.
+    /// Evaluates `load` at `pseudo_time` and **accumulates** the result into
+    /// `self.p_base`. Subsequent calls accumulate further — call
+    /// [`clear_baked_loads`] first to start fresh.
     ///
-    /// # Typical use
+    /// Unlike the removed `lock_loads`, this method does **not** touch
+    /// `self.loads` (the active load queue). The caller decides what gets
+    /// baked and what stays dynamic.
+    ///
+    /// # Typical use — seismic pre-load
+    ///
     /// ```rust,ignore
-    /// // Phase 1: gravity analysis
-    /// model.add_load_typed(gravity_load);
-    /// // ... run linear static to convergence ...
+    /// // Bake the expected seismic weight (1.0·DL + 0.25·LL) permanently.
+    /// model.bake_load(&seismic_combo, 1.0);
     ///
-    /// // Transition: lock gravity, set up pushover
-    /// model.lock_loads(1.0);          // bakes gravity at pseudo_time=1.0
-    /// model.add_load_typed(lateral);  // fresh lateral load for pushover
-    /// // ... run pushover ...
+    /// // Active loads for the pushover (untouched by bake_load).
+    /// model.add_load_typed(lateral_load);
     /// ```
-    ///
-    /// # Errors
-    /// Returns [`AssemblyError::EmptyLoadLock`] if there are no active loads
-    /// to bake, as this almost always indicates a user logic error.
-    pub fn lock_loads(&mut self, pseudo_time: f64) -> Result<()> {
-        if self.loads.is_empty() {
-            return Err(AssemblyError::EmptyLoadLock);
+    pub fn bake_load(&mut self, load: &dyn LoadPattern, pseudo_time: f64) {
+        if self.p_base.is_none() {
+            self.p_base = Some(vec![0.0_f64; self.n_dof()]);
         }
-
+        // borrow split: p_base is separate from the rest of self
         let n = self.n_dof();
-        let mut f = vec![0.0_f64; n];
-
-        // Seed from existing p_base (supports chained lock calls)
-        if let Some(ref base) = self.p_base {
-            f.iter_mut().zip(base.iter()).for_each(|(fi, &bi)| *fi = bi);
+        // We need to pass `self` to `apply_to_global_vector`, but we also
+        // hold a mutable reference to `p_base`. Use a temporary scratch
+        // buffer and accumulate, to avoid the split-borrow problem.
+        let mut scratch = vec![0.0_f64; n];
+        load.apply_to_global_vector(pseudo_time, self, &mut scratch);
+        let p_base = self.p_base.as_mut().unwrap();
+        for (b, s) in p_base.iter_mut().zip(scratch.iter()) {
+            *b += s;
         }
+    }
 
-        // Apply all active patterns at the given pseudo_time
-        for load in &self.loads {
-            load.apply_to_global_vector(pseudo_time, self, &mut f);
-        }
+    /// Returns `true` if the model has a non-empty baked base load vector.
+    #[inline]
+    pub fn has_baked_loads(&self) -> bool {
+        self.p_base.is_some()
+    }
 
-        self.p_base = Some(f);
+    /// Clear the baked base load vector (`p_base = None`).
+    ///
+    /// Essential for multi-stage analyses where the pre-load state needs
+    /// to be reset between analysis phases.
+    #[inline]
+    pub fn clear_baked_loads(&mut self) {
+        self.p_base = None;
+    }
+
+    /// Clear the active dynamic load queue without touching `p_base`.
+    ///
+    /// Equivalent to OpenSees's `loadConst` when called after
+    /// [`bake_load`]: first bake the gravity state, then clear the
+    /// active queue before adding the next analysis phase's loads.
+    #[inline]
+    pub fn clear_active_loads(&mut self) {
         self.loads.clear();
-        Ok(())
+    }
+
+    // -----------------------------------------------------------------
+    // Diagnostics
+    // -----------------------------------------------------------------
+
+    /// Print a structured diagnostic report to stdout.
+    ///
+    /// Checks for common modelling errors and reports the active load tree.
+    /// Call this before the first `driver.analyze()` to verify the model.
+    pub fn diagnose(&self) {
+        println!("╔═══════════════════════════════════════╗");
+        println!("║       Echelon Model Diagnostics       ║");
+        println!("╚═══════════════════════════════════════╝");
+        println!("  Nodes:    {}", self.n_nodes());
+        println!("  Elements: {}", self.n_elements());
+        println!("  DOFs:     {}", self.n_dof());
+        println!("  Constraints: {}", self.constraints.len());
+
+        // Baked load status
+        if self.has_baked_loads() {
+            println!("    Baked base loads (p_base) are ACTIVE.");
+            println!("    These will be present in all subsequent analyses.");
+            println!("    Call model.clear_baked_loads() to reset if needed.");
+        } else {
+            println!("  ✓ No baked base loads.");
+        }
+
+        // Constraint check: warn if no constraints at all (likely mechanism)
+        if self.constraints.is_empty() && !self.elements.is_empty() {
+            println!("    WARNING: no Dirichlet constraints — the stiffness");
+            println!("    matrix will be singular (rigid-body mechanism).");
+        }
+
+        // Active load tree
+        println!();
+        self.print_load_tree();
+    }
+
+    /// Print the active load patterns as a hierarchical tree.
+    pub fn print_load_tree(&self) {
+        println!("=== Active Load Tree ===");
+        if self.loads.is_empty() {
+            println!("  (no active loads)");
+            return;
+        }
+        let n = self.loads.len();
+        for (i, load) in self.loads.iter().enumerate() {
+            print!("{}", load.format_tree("  ", i == n - 1));
+        }
     }
 
     // -----------------------------------------------------------------
@@ -367,15 +433,6 @@ mod tests {
         m.build_state();
         assert_eq!(m.u_global.len(), 6);
         assert!(m.u_global.iter().all(|&v| v == 0.0));
-    }
-
-    #[test]
-    fn lock_loads_empty_errors() {
-        let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.build_state();
-        let err = m.lock_loads(1.0).unwrap_err();
-        assert!(matches!(err, AssemblyError::EmptyLoadLock));
     }
 
     #[test]

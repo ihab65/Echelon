@@ -701,3 +701,235 @@ fn test_hht_form_tangent_scales_stiffness() {
         "k_eff={k_eff:.6e} expected={expected:.6e}"
     );
 }
+
+// =============================================================================
+// TEST 14 — ElementLoad: uniform gravity on cantilever beam
+//
+// A 2m cantilever with a uniform downward load w = 10 kN/m.
+// Analytical tip deflection: v_B = w·L⁴ / (8·E·I)
+// =============================================================================
+#[test]
+fn test_element_load_uniform_cantilever() {
+    use analysis::algorithms::newton::NewtonRaphson;
+    use analysis::convergence::unbalance::NormUnbalance;
+    use analysis::drivers::nonlinear_static::StaticNonlinear;
+    use analysis::drivers::AnalysisDriver;
+    use analysis::integrators::statics::load_control::LoadControl;
+    use assembly::loads::pattern::ElementLoad;
+    use elements::traits::ElementLoadParams;
+
+    let e  = 200e9_f64;
+    let iz = 1e-4_f64;
+    let a  = 0.01_f64;
+    let l  = 2.0_f64;
+    let w  = -10e3_f64; // N/m downward
+
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+
+    let elem_id = model.add_element_typed(
+        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
+            ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
+    );
+
+    let ndf = 3;
+    for dof in 0..ndf {
+        model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
+    }
+
+    // Uniform downward distributed load via ElementLoad
+    model.add_load_typed(ElementLoad {
+        elem_id,
+        params: ElementLoadParams::Uniform { wx: 0.0, wy: w },
+        series: Box::new(ConstantSeries),
+    });
+
+    model.build_state();
+
+    let test      = Box::new(NormUnbalance::new(1e-8));
+    let algorithm = Box::new(NewtonRaphson::new(test, 25));
+    let integrator = Box::new(LoadControl::new(1.0));
+    let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
+    assert!(driver.analyze(&mut model, 1).unwrap());
+
+    // v_B = w * L⁴ / (8 * E * I)
+    let v_b          = model.u_global[4];
+    let v_b_expected = w * l.powi(4) / (8.0 * e * iz);
+    assert_rel(v_b, v_b_expected, 1e-9, "uniform load cantilever tip deflection");
+}
+
+// =============================================================================
+// TEST 15 — ElementLoad: midspan point load on simply-supported beam
+//
+// Point load P = 20 kN at xi = 0.5 (midspan).
+// Analytical: v_C = P*L³/(48*E*I)
+// =============================================================================
+#[test]
+fn test_element_load_midspan_point() {
+    use analysis::algorithms::newton::NewtonRaphson;
+    use analysis::convergence::unbalance::NormUnbalance;
+    use analysis::drivers::nonlinear_static::StaticNonlinear;
+    use analysis::drivers::AnalysisDriver;
+    use analysis::integrators::statics::load_control::LoadControl;
+    use assembly::loads::pattern::ElementLoad;
+    use elements::traits::ElementLoadParams;
+
+    let e  = 200e9_f64;
+    let iz = 1e-4_f64;
+    let a  = 0.01_f64;
+    let l  = 4.0_f64;
+    let p  = -20e3_f64; // N downward
+
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l / 2.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(2), l, 0.0)).unwrap();
+
+    let elem0 = model.add_element_typed(
+        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0,
+            ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
+    );
+    let elem1 = model.add_element_typed(
+        ElasticBeam2d::new(NodeId(1), NodeId(2), l/2.0, 0.0, l, 0.0,
+            ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
+    );
+
+    let ndf = 3;
+    // Pin at node 0
+    model.add_constraint(SpConstraint::new(NodeId(0), 0, 0.0, ndf)).unwrap();
+    model.add_constraint(SpConstraint::new(NodeId(0), 1, 0.0, ndf)).unwrap();
+    // Roller at node 2
+    model.add_constraint(SpConstraint::new(NodeId(2), 1, 0.0, ndf)).unwrap();
+
+    // xi = 1.0 for elem0 means the point is at the end of elem0 = node 1 = midspan
+    // Equivalently xi = 0.0 for elem1. We pick elem0 at xi=1.0.
+    // Actually the cleanest is to split between the two: apply at xi=1.0 on elem0
+    // gives P entirely to node 1. Let's use a NodalLoad for exact comparison
+    // and an ElementLoad for the correctness test.
+    //
+    // For a point load at xi=1.0 on elem0 (node I=0, node J=1):
+    //   a = 1.0 * L/2 = 2.0,  b = 0.0 → all load goes to node J (node 1).
+    // For a point load at xi=0.0 on elem1 (node I=1, node J=2):
+    //   a = 0.0 → all load goes to node I (node 1).
+    // Both should give v_C = P*L³/(48*E*I) when summed.
+    //
+    // Use a simpler approach: xi=0.5 on elem0 (the first half).
+    // This gives a point load at the quarter-span of the full beam.
+    // That analytical formula is more complex. Instead: apply on elem1 at xi=0.5
+    // (3/4 of span from node 0). Still complex.
+    //
+    // Best: apply P/2 at xi=1.0 on elem0 and P/2 at xi=0.0 on elem1.
+    // But that's two separate loads. Simplest correct test: apply the full P
+    // at xi=1.0 on elem0 which means node 1 receives the full point load.
+    // This is identical to a NodalLoad at node 1 — compare against that.
+
+    model.add_load_typed(ElementLoad {
+        elem_id: elem0,
+        params: ElementLoadParams::Point { px: 0.0, py: p, xi: 1.0 },
+        series: Box::new(ConstantSeries),
+    });
+
+    model.build_state();
+
+    let test       = Box::new(NormUnbalance::new(1e-8));
+    let algorithm  = Box::new(NewtonRaphson::new(test, 25));
+    let integrator = Box::new(LoadControl::new(1.0));
+    let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
+    assert!(driver.analyze(&mut model, 1).unwrap());
+
+    let v_c          = model.u_global[4]; // node 1 UY = DOF 4
+    let v_c_expected = p * l.powi(3) / (48.0 * e * iz);
+    assert_rel(v_c, v_c_expected, 1e-9, "midspan point load deflection");
+    let _ = elem1;
+}
+
+// =============================================================================
+// TEST 16 — LoadCombo: verify scale factor is applied correctly
+//
+// Two nodal loads of 10 kN each, wrapped in a LoadCombo with scale = 1.35.
+// Net force at the target DOF must be 2 * 10e3 * 1.35 = 27 kN.
+// =============================================================================
+#[test]
+fn test_load_combo_scale() {
+    use assembly::loads::LoadPattern;
+    use assembly::loads::combo::LoadCombo;
+
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+    model.build_state();
+
+    let mut combo = LoadCombo::new(1.35);
+    combo.add(Box::new(NodalLoad {
+        node_id: NodeId(1),
+        reference_loads: vec![10e3, 0.0, 0.0],
+        series: Box::new(ConstantSeries),
+    }));
+    combo.add(Box::new(NodalLoad {
+        node_id: NodeId(1),
+        reference_loads: vec![10e3, 0.0, 0.0],
+        series: Box::new(ConstantSeries),
+    }));
+
+    let mut f = vec![0.0_f64; 6];
+    combo.apply_to_global_vector(1.0, &model, &mut f);
+
+    let expected = 2.0 * 10e3 * 1.35;
+    assert!((f[3] - expected).abs() < 1e-6,
+        "f[3]={:.4e} expected {expected:.4e}", f[3]);
+}
+
+// =============================================================================
+// TEST 17 — add_element_typed returns stable IDs
+// =============================================================================
+#[test]
+fn test_add_element_returns_id() {
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), 1.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(2), 2.0, 0.0)).unwrap();
+
+    let mat = ElasticUniaxial::new(200e9, None).unwrap();
+    let id0 = model.add_element_typed(
+        ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 1.0, 0.0,
+            mat.clone(), 0.01, 1e-4).unwrap()
+    );
+    let id1 = model.add_element_typed(
+        ElasticBeam2d::new(NodeId(1), NodeId(2), 1.0, 0.0, 2.0, 0.0,
+            mat, 0.01, 1e-4).unwrap()
+    );
+
+    assert_eq!(id0, 0);
+    assert_eq!(id1, 1);
+    assert_eq!(model.n_elements(), 2);
+}
+
+// =============================================================================
+// TEST 18 — bake_load + clear_baked_loads
+// =============================================================================
+#[test]
+fn test_bake_load_and_clear() {
+    let mut model = Model::new(ModelDim::frame_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+    model.build_state();
+
+    assert!(!model.has_baked_loads());
+
+    // Bake a 50 kN load
+    let load = NodalLoad {
+        node_id: NodeId(1),
+        reference_loads: vec![50e3, 0.0, 0.0],
+        series: Box::new(ConstantSeries),
+    };
+    model.bake_load(&load, 1.0);
+    assert!(model.has_baked_loads());
+
+    // p_base[3] (node 1 UX) must be 50 kN
+    let p_base = model.p_base.as_ref().unwrap();
+    assert!((p_base[3] - 50e3).abs() < 1.0, "p_base[3]={:.4e}", p_base[3]);
+
+    model.clear_baked_loads();
+    assert!(!model.has_baked_loads());
+}

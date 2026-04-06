@@ -118,6 +118,7 @@ pub mod topology;
 pub mod kinematics;
 pub mod loads;
 pub mod builders;
+pub mod macros;
 
 // -----------------------------------------------------------------
 // Flat re-exports — the most commonly imported items

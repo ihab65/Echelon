@@ -91,27 +91,6 @@ pub enum AssemblyError {
     )]
     MissingDensity { element_idx: usize },
 
-    // ---- Load baking -----------------------------------------------------
-
-    /// `lock_loads` was called but the model has no active load patterns
-    /// to bake. This is a logic error: locking an empty load queue produces
-    /// a zeroed `p_base` which silently suppresses gravity in subsequent
-    /// analysis phases.
-    #[error(
-        "Load locking on empty queue: `lock_loads` was called but the model \
-         has no active load patterns. The resulting `p_base` will be all zeros."
-    )]
-    #[diagnostic(
-        code(echelon::assembly::loads::empty_lock),
-        help(
-            "Add at least one load pattern via `Model::add_load` before \
-             calling `Model::lock_loads`. If this is intentional (e.g. \
-             resetting the load state), call `model.p_base = None` directly \
-             instead of `lock_loads` to make the intent explicit."
-        )
-    )]
-    EmptyLoadLock,
-
     // ---- Transparent passthroughs ----------------------------------------
 
     /// A sparse matrix operation (pattern construction, scatter, BC
