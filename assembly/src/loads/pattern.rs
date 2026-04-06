@@ -24,6 +24,7 @@
 //! after, so over-writing is harmless.
 
 use fem_core::NodeId;
+use elements::traits::ElementLoadParams;
 
 use crate::loads::series::TimeSeries;
 use crate::model::Model;
@@ -49,6 +50,23 @@ pub trait LoadPattern: Send + Sync {
         model:       &Model,
         f_ext:       &mut [f64],
     );
+
+        /// Clone this load pattern into a heap-allocated trait object.
+    ///
+    /// Required by [`LoadCombo`] and the `load_combo!` macro so that load
+    /// cases can be composed into combinations without consuming ownership.
+    fn clone_box(&self) -> Box<dyn LoadPattern>;
+
+    /// Format this pattern as a tree node for diagnostic output.
+    ///
+    /// `prefix` is the indentation string for this level.
+    /// `is_last` controls whether `└──` or `├──` is drawn.
+    ///
+    /// The default implementation produces a generic one-line entry.
+    fn format_tree(&self, prefix: &str, is_last: bool) -> String {
+        let branch = if is_last { "└── " } else { "├── " };
+        format!("{prefix}{branch}LoadPattern\n")
+    }
 }
 
 // -----------------------------------------------------------------
@@ -107,12 +125,117 @@ impl LoadPattern for NodalLoad {
             }
         }
     }
+
+    fn clone_box(&self) -> Box<dyn LoadPattern> {
+        // We need NodalLoad's fields to be Clone. TimeSeries is a trait object;
+        // we delegate to a new impl on it.
+        Box::new(NodalLoad {
+            node_id:         self.node_id,
+            reference_loads: self.reference_loads.clone(),
+            series:          self.series.clone_box(),
+        })
+    }
+
+    fn format_tree(&self, prefix: &str, is_last: bool) -> String {
+        let branch = if is_last { "└── " } else { "├── " };
+        let fx = self.reference_loads.first().copied().unwrap_or(0.0);
+        let fy = self.reference_loads.get(1).copied().unwrap_or(0.0);
+        format!(
+            "{prefix}{branch}NodalLoad (node={}, Fx={fx:.3e}, Fy={fy:.3e})\n",
+            self.node_id.0
+        )
+    }
+
 }
 
 // Make NodalLoad Send + Sync — both NodeId and Vec<f64> are already Send + Sync.
 // The Box<dyn TimeSeries> bound enforces the same on the series.
 unsafe impl Send for NodalLoad {}
 unsafe impl Sync for NodalLoad {}
+
+// -----------------------------------------------------------------
+// ElementLoad
+// -----------------------------------------------------------------
+
+/// A distributed or point load applied along the span of a specific element.
+///
+/// The element is identified by the index returned from
+/// [`Model::add_element_typed`]. The load is converted to equivalent global
+/// nodal forces via [`Element::equivalent_nodal_forces`] and scattered into
+/// `f_ext` at the element's global DOFs.
+///
+/// # Example — uniform gravity load on beam element 2
+///
+/// ```rust,ignore
+/// use assembly::loads::pattern::ElementLoad;
+/// use assembly::loads::series::ConstantSeries;
+/// use elements::ElementLoadParams;
+///
+/// model.add_load_typed(ElementLoad {
+///     elem_id: 2,
+///     params:  ElementLoadParams::Uniform { wx: 0.0, wy: -20e3 }, // 20 kN/m downward
+///     series:  Box::new(ConstantSeries),
+/// });
+/// ```
+pub struct ElementLoad {
+    /// Index of the target element (returned by [`Model::add_element_typed`]).
+    pub elem_id: usize,
+    /// Load type and magnitude.
+    pub params: ElementLoadParams,
+    /// Temporal scaling rule.
+    pub series: Box<dyn TimeSeries>,
+}
+
+impl LoadPattern for ElementLoad {
+    fn apply_to_global_vector(
+        &self,
+        pseudo_time: f64,
+        model:       &Model,
+        f_ext:       &mut [f64],
+    ) {
+        let Some(elem) = model.elements.get(self.elem_id) else {
+            // Element index out of range — silently skip rather than panic.
+            // This can only happen if the user provides an invalid elem_id,
+            // which should be caught in a future validation pass.
+            return;
+        };
+
+        let scale   = self.series.factor_at(pseudo_time);
+        let f_enq   = elem.equivalent_nodal_forces(&self.params);
+        let dof_map = elem.dof_map();
+
+        for (local_i, &global_dof) in dof_map.as_usize_slice().iter().enumerate() {
+            if global_dof < f_ext.len() {
+                f_ext[global_dof] += f_enq[local_i] * scale;
+            }
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn LoadPattern> {
+        Box::new(ElementLoad {
+            elem_id: self.elem_id,
+            params:  self.params.clone(),
+            series:  self.series.clone_box(),
+        })
+    }
+
+    fn format_tree(&self, prefix: &str, is_last: bool) -> String {
+        let branch = if is_last { "└── " } else { "├── " };
+        let desc = match &self.params {
+            ElementLoadParams::Uniform { wx, wy } =>
+                format!("Uniform(wx={wx:.3e}, wy={wy:.3e})"),
+            ElementLoadParams::Point { px, py, xi } =>
+                format!("Point(px={px:.3e}, py={py:.3e}, xi={xi:.2})"),
+            ElementLoadParams::Trapezoidal { wy_i, wy_j, .. } =>
+                format!("Trapezoidal(wy_i={wy_i:.3e}, wy_j={wy_j:.3e})"),
+        };
+        format!("{prefix}{branch}ElementLoad (elem={}, {desc})\n", self.elem_id)
+    }
+}
+
+unsafe impl Send for ElementLoad {}
+unsafe impl Sync for ElementLoad {}
+
 
 // -----------------------------------------------------------------
 // Tests

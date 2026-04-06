@@ -37,6 +37,9 @@
 pub trait TimeSeries: Send + Sync {
     /// Return the load scale factor at the given `pseudo_time`.
     fn factor_at(&self, pseudo_time: f64) -> f64;
+
+    /// Clone into a boxed trait object.
+    fn clone_box(&self) -> Box<dyn TimeSeries>;
 }
 
 // -----------------------------------------------------------------
@@ -57,6 +60,7 @@ impl TimeSeries for ConstantSeries {
     fn factor_at(&self, _pseudo_time: f64) -> f64 {
         1.0
     }
+    fn clone_box(&self) -> Box<dyn TimeSeries> { Box::new(*self) }
 }
 
 // -----------------------------------------------------------------
@@ -79,6 +83,7 @@ impl TimeSeries for LinearSeries {
     fn factor_at(&self, pseudo_time: f64) -> f64 {
         pseudo_time
     }
+    fn clone_box(&self) -> Box<dyn TimeSeries> { Box::new(*self) }
 }
 
 // -----------------------------------------------------------------
@@ -171,6 +176,8 @@ impl TimeSeries for PathSeries {
         let alpha = (pseudo_time - t0) / (t1 - t0);
         v0 + alpha * (v1 - v0)
     }
+
+    fn clone_box(&self) -> Box<dyn TimeSeries> { Box::new(self.clone()) }
 }
 
 // -----------------------------------------------------------------

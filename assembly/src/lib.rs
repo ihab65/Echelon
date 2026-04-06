@@ -139,8 +139,10 @@ pub use topology::{build_pattern, count_dofs, validate_dof_maps};
 pub use kinematics::extract_local_u;
 
 // Load traits and concrete implementations
-pub use loads::pattern::{LoadPattern, NodalLoad};
+pub use loads::pattern::{LoadPattern, NodalLoad, ElementLoad};
 pub use loads::series::{TimeSeries, ConstantSeries, LinearSeries, PathSeries};
+pub use loads::combo::LoadCombo;
+pub use loads::gravity::GravityLoad;
 
 // All five builder functions
 pub use builders::{
