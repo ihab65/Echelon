@@ -134,11 +134,21 @@ impl Integrator for DispControl {
             });
         }
 
-        // Simple predictor: apply delta_u_ctrl as a pseudo-load-factor increment.
-        // In a full arc-length implementation this would use the tangent predictor.
-        // For a load-pattern-driven displacement control, we increment lambda
-        // so that the reference pattern produces exactly delta_u_ctrl at the DOF.
-        // Here we use a unit increment and rely on the Newton loop to correct it.
+        // TODO: Implement the Batoz/Superposition double-solve method.
+        //
+        // True displacement control requires solving the system TWICE per iteration:
+        //   1. Solve residual:      K_T Δu_R = R
+        //   2. Solve reference:    K_T Δu_P = P_ref
+        //   3. Compute Δλ = (Δu_ctrl - Δu_R[dof]) / Δu_P[dof]
+        //   4. Total increment:    Δu = Δu_R + Δλ Δu_P
+        //
+        // This requires a dedicated `DisplacementAlgorithm` that has access to
+        // both the factored K_T and the control DOF index.
+        //
+        // CURRENT BEHAVIOUR: This is effectively load control with Δλ = Δu_ctrl.
+        // It produces correct displacements only when the reference load pattern
+        // is calibrated so that unit load gives unit displacement at `control_dof`.
+        // For post-peak tracing, use ArcLength or an external displacement algorithm.
         self.current_lambda += self.delta_u_ctrl;
         self.accumulated_u  += self.delta_u_ctrl;
 

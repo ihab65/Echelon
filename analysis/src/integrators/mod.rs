@@ -80,6 +80,18 @@ pub trait Integrator: Send + Sync {
     /// integrator is in an invalid state (e.g., called before initialization).
     fn new_step(&mut self, system: &mut GlobalSystem, model: &mut Model) -> Result<()>;
 
+    /// Augment `system.k_t` with inertia and damping contributions.
+    ///
+    /// Called by the algorithm immediately after `assemble_stiffness` on
+    /// every Newton iteration. Static integrators leave `k_t` unchanged
+    /// (the default no-op is correct for them). Transient integrators
+    /// (Newmark, HHT) add `a0 * M` and `a1 * C` so the solver factors the
+    /// true effective stiffness `K_eff = K_T + a0*M + a1*C`.
+    fn form_tangent(&self, system: &mut GlobalSystem) -> Result<()> {
+        let _ = system; // static integrators are a no-op
+        Ok(())
+    }
+
     /// Save the converged integrator state after a successful Newton loop.
     ///
     /// For load control: records the current λ as the committed load level.

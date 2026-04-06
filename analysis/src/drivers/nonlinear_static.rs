@@ -171,7 +171,13 @@ impl AnalysisDriver for StaticNonlinear {
             self.integrator.new_step(&mut self.system, model)?;
 
             // ── 2. Run the Newton-Raphson inner loop ─────────────────────
-            match self.algorithm.solve(&mut self.system, model, &mut self.solver, step) {
+            match self.algorithm.solve(
+                &mut self.system,
+                model,
+                &mut self.solver,
+                self.integrator.as_ref(),
+                step
+            ) {
                 Ok(()) => {
                     // ── 3. Success: commit the integrator state ──────────
                     self.integrator.commit();

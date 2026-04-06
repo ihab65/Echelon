@@ -252,6 +252,31 @@ impl Integrator for Newmark {
         Ok(())
     }
 
+    fn form_tangent(&self, system: &mut GlobalSystem) -> Result<()> {
+        // K_eff = K_T + a0*M + a1*C  (Newmark coefficients)
+        // a0 = 1/(β Δt²),  a1 = γ/(β Δt)
+        let (a0, a1, _, _, _, _) = self.coefficients();
+
+        // Add a0 * M to k_t
+        for (row, col, val) in self.mass.iter_upper() {
+            system.k_t.add_value(row, col, val * a0)
+                .map_err(|e| crate::error::AnalysisError::from(
+                    assembly::error::AssemblyError::from(e)
+                ))?;
+        }
+
+        // Add a1 * C to k_t (if damping matrix is present)
+        if let Some(ref c) = self.damping {
+            for (row, col, val) in c.iter_upper() {
+                system.k_t.add_value(row, col, val * a1)
+                    .map_err(|e| crate::error::AnalysisError::from(
+                        assembly::error::AssemblyError::from(e)
+                    ))?;
+            }
+        }
+        Ok(())
+    }
+
     fn commit(&mut self) {
         // Update velocity and acceleration from the converged displacement
         // This is called by the driver after a successful Newton loop.

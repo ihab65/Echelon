@@ -59,6 +59,7 @@ use solvers::{linear::LinearSolver, error::SolverError};
 use crate::algorithms::EquiSolnAlgo;
 use crate::error::{AnalysisError, Result};
 use crate::system::GlobalSystem;
+use crate::integrators::Integrator;
 use crate::convergence::ConvergenceTest;
 use assembly::Model;
 
@@ -193,6 +194,7 @@ impl EquiSolnAlgo for NewtonRaphson {
         system: &mut GlobalSystem,
         model:  &mut Model,
         solver: &mut dyn LinearSolver<f64>,
+        integrator: &dyn Integrator,
         step:   usize,
     ) -> Result<()> {
         for iter in 0..self.max_iterations {
@@ -202,6 +204,10 @@ impl EquiSolnAlgo for NewtonRaphson {
             // ── 2. Assemble tangent stiffness K_T(u_k) ───────────────
             assemble_stiffness(model, &mut system.k_t)
                 .map_err(|e| { revert_state(model); AnalysisError::from(e) })?;
+
+            // ── 2b. Augment K_T with inertia/damping (no-op for statics)
+            integrator.form_tangent(system)
+                .map_err(|e| { revert_state(model); e })?;
 
             // ── 3. Assemble internal force F_int(u_k) ────────────────
             assemble_internal_force(model, &mut system.f_int)

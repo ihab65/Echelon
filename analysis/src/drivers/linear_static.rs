@@ -38,6 +38,7 @@ use crate::algorithms::linear::LinearAlgorithm;
 use crate::drivers::AnalysisDriver;
 use crate::error::{AnalysisError, Result};
 use crate::system::GlobalSystem;
+use crate::integrators::statics::load_control::LoadControl;
 
 // -----------------------------------------------------------------
 // LinearStatic
@@ -69,6 +70,9 @@ pub struct LinearStatic {
 
     /// Pre-allocated analysis buffers. Constructed on the first call.
     system: Option<GlobalSystem>,
+
+    /// Dummy static integrator — form_tangent is a no-op for linear static.
+    integrator:  LoadControl
 }
 
 impl LinearStatic {
@@ -78,6 +82,7 @@ impl LinearStatic {
             algorithm: LinearAlgorithm,
             solver:    CholeskySolver::new(),
             system:    None,
+            integrator: LoadControl::new(1.0), // Δλ = 1.0 for load-controlled
         }
     }
 }
@@ -140,7 +145,7 @@ impl AnalysisDriver for LinearStatic {
             assemble_load_vector(model, 1.0, &mut system.f_ext)?;
 
             // Single-pass solve (no Newton loop)
-            self.algorithm.solve(system, model, &mut self.solver, step)?;
+            self.algorithm.solve(system, model, &mut self.solver, &self.integrator, step)?;
         }
 
         Ok(true)

@@ -33,6 +33,7 @@ use assembly::{
 };
 use solvers::linear::LinearSolver;
 
+use crate::Integrator;
 use crate::algorithms::EquiSolnAlgo;
 use crate::error::{AnalysisError, Result};
 use crate::system::GlobalSystem;
@@ -83,11 +84,14 @@ impl EquiSolnAlgo for LinearAlgorithm {
         system: &mut GlobalSystem,
         model:  &mut Model,
         solver: &mut dyn LinearSolver<f64>,
+        integrator: &dyn Integrator,
         step:   usize,
     ) -> Result<()> {
         system.zero_out();
 
         assemble_stiffness(model, &mut system.k_t)?;
+        // Augment K_T with inertia/damping (no-op for LinearStatic).
+        integrator.form_tangent(system)?;
         assemble_internal_force(model, &mut system.f_int)?;
         system.form_residual();
         apply_dirichlet_bcs(&model.constraints, &mut system.k_t, &mut system.r)?;

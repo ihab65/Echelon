@@ -122,7 +122,13 @@ impl AnalysisDriver for TransientDriver {
         for step in 0..steps {
             self.integrator.new_step(&mut self.system, model)?;
 
-            match self.algorithm.solve(&mut self.system, model, &mut self.solver, step) {
+            match self.algorithm.solve(
+                &mut self.system, 
+                model, 
+                &mut self.solver, 
+                self.integrator.as_ref(),
+                step
+            ) {
                 Ok(()) => {
                     self.integrator.commit();
                 }

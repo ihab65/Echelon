@@ -50,6 +50,9 @@ use assembly::{
     Model, Node,
     constraints::SpConstraint,
     loads::{NodalLoad, ConstantSeries},
+    build_pattern,
+    assemble_stiffness,
+    assemble_mass
 };
 
 use analysis::algorithms::newton::NewtonRaphson;
@@ -587,3 +590,114 @@ fn test_static_nonlinear_rejects_model_with_no_nodes() {
 //     assert!((lc.lambda() - 0.50).abs() < 1e-15,
 //         "After revert, lambda should be back at committed value 0.50, got {}", lc.lambda());
 // }
+
+// =============================================================================
+// TEST 12 — Newmark::form_tangent augments K_T with a0*M
+//
+// SDOF mass-spring: k = EA/L = 1 N/m, lumped mass m = 1 kg.
+// Newmark average acceleration: β = 0.25, γ = 0.5, dt = 0.1.
+//   a0 = 1/(β·dt²) = 400
+// After assemble_stiffness + form_tangent, the free DOF diagonal must be:
+//   K_T[free, free] + a0 * M[free, free]  =  k + a0 * (m/2)
+// =============================================================================
+#[test]
+fn test_newmark_form_tangent_augments_stiffness() {
+    use analysis::integrators::transient::newmark::Newmark;
+    use analysis::integrators::Integrator;
+    use analysis::system::GlobalSystem;
+
+    // 1-D spring: EA/L = 1,  rho·A·L = 1 → rho = 1/(A·L) = 1
+    let e = 1.0_f64;
+    let a = 1.0_f64;
+    let l = 1.0_f64;
+
+    let mut model = Model::new(ModelDim::truss_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+    model.add_element_typed(
+        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
+            ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
+    );
+    let ndf = 2;
+    for dof in [0, 1] {
+        model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
+    }
+    model.add_constraint(SpConstraint::new(NodeId(1), 1, 0.0, ndf)).unwrap(); // UY
+    model.build_state();
+
+    let k_pat = build_pattern(&model).unwrap();
+    let mut mass_mat = k_pat.clone();
+    assemble_mass(&model, &mut mass_mat).unwrap();
+
+    let dt = 0.1_f64;
+    let integrator = Newmark::average_acceleration(dt, mass_mat, None);
+
+    let mut system = GlobalSystem::new(k_pat);
+    assemble_stiffness(&model, &mut system.k_t).unwrap();
+    let k_static = system.k_t.get(2, 2).unwrap(); // node 1 UX = DOF 2
+
+    integrator.form_tangent(&mut system).unwrap();
+    let k_eff = system.k_t.get(2, 2).unwrap();
+
+    // a0 = 1/(0.25 * 0.01) = 400; lumped mass at DOF 2 = rho*A*L/2 = 0.5
+    let a0 = 400.0_f64;
+    let m_dof2 = 0.5_f64; // lumped
+    let expected = k_static + a0 * m_dof2;
+
+    assert!(
+        (k_eff - expected).abs() < 1e-9,
+        "k_eff={k_eff:.6e} expected={expected:.6e}"
+    );
+}
+
+// =============================================================================
+// TEST 13 — HHT::form_tangent scales K_T by (1+α) then adds a0*M
+// =============================================================================
+#[test]
+fn test_hht_form_tangent_scales_stiffness() {
+    use analysis::integrators::transient::hht::HHT;
+    use analysis::integrators::Integrator;
+    use analysis::system::GlobalSystem;
+
+    let e = 1.0_f64; let a = 1.0_f64; let l = 1.0_f64;
+    let alpha = -0.1_f64;
+    let dt    = 0.05_f64;
+
+    let mut model = Model::new(ModelDim::truss_2d());
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+    model.add_element_typed(
+        Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
+            ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
+    );
+    let ndf = 2;
+    for dof in [0, 1] {
+        model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
+    }
+    model.add_constraint(SpConstraint::new(NodeId(1), 1, 0.0, ndf)).unwrap();
+    model.build_state();
+
+    let k_pat = build_pattern(&model).unwrap();
+    let mut mass_mat = k_pat.clone();
+    assemble_mass(&model, &mut mass_mat).unwrap();
+
+    let integrator = HHT::new(alpha, dt, mass_mat, None);
+
+    let mut system = GlobalSystem::new(k_pat);
+    assemble_stiffness(&model, &mut system.k_t).unwrap();
+    let k_static = system.k_t.get(2, 2).unwrap();
+
+    integrator.form_tangent(&mut system).unwrap();
+    let k_eff = system.k_t.get(2, 2).unwrap();
+
+    // β = (1-α)²/4 = (1.1)²/4 = 0.3025
+    let beta = (1.0 - alpha).powi(2) / 4.0;
+    let a0   = 1.0 / (beta * dt * dt);
+    let m_dof2 = 0.5_f64; // lumped
+    let expected = (1.0 + alpha) * k_static + a0 * m_dof2;
+
+    assert!(
+        (k_eff - expected).abs() < 1e-6,
+        "k_eff={k_eff:.6e} expected={expected:.6e}"
+    );
+}

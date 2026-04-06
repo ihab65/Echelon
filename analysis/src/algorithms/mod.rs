@@ -35,6 +35,7 @@ pub mod newton;
 use assembly::Model;
 use crate::error::Result;
 use crate::system::GlobalSystem;
+use crate::integrators::Integrator;
 use solvers::linear::LinearSolver;
 
 // -----------------------------------------------------------------
@@ -88,6 +89,7 @@ pub trait EquiSolnAlgo: Send + Sync {
         system:  &mut GlobalSystem,
         model:   &mut Model,
         solver:  &mut dyn LinearSolver<f64>,
+        integrator: &dyn Integrator,
         step:    usize,
     ) -> Result<()>;
 

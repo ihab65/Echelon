@@ -58,6 +58,7 @@ use solvers::{linear::LinearSolver, error::SolverError};
 use crate::algorithms::EquiSolnAlgo;
 use crate::error::{AnalysisError, Result};
 use crate::system::GlobalSystem;
+use crate::integrators::Integrator;
 use crate::convergence::ConvergenceTest;
 use assembly::Model;
 
@@ -115,12 +116,16 @@ impl EquiSolnAlgo for ModifiedNewton {
         system: &mut GlobalSystem,
         model:  &mut Model,
         solver: &mut dyn LinearSolver<f64>,
+        integrator: &dyn Integrator,
         step:   usize,
     ) -> Result<()> {
         // ── Form and factorize K_T once ───────────────────────────────────
         system.zero_out();
         assemble_stiffness(model, &mut system.k_t)
             .map_err(|e| { revert_state(model); AnalysisError::from(e) })?;
+        // Augment with inertia/damping terms (no-op for static integrators).
+        integrator.form_tangent(system)
+            .map_err(|e| { revert_state(model); e })?;
         apply_dirichlet_bcs(&model.constraints, &mut system.k_t, &mut system.r)
             .map_err(|e| { revert_state(model); AnalysisError::from(e) })?;
 

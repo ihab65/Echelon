@@ -195,6 +195,36 @@ impl Integrator for HHT {
         Ok(())
     }
 
+    fn form_tangent(&self, system: &mut GlobalSystem) -> Result<()> {
+        // HHT effective stiffness: K_eff = a0*M + (1+α)*a1*C + (1+α)*K_T
+        // K_T was just assembled by assemble_stiffness; scale it by (1+α).
+        system.k_t.scale(1.0 + self.alpha);
+
+        let a0 = 1.0 / (self.beta * self.dt * self.dt);
+        let a1 = self.gamma / (self.beta * self.dt);
+
+        // Add a0 * M
+        for (row, col, val) in self.mass.iter_upper() {
+            system.k_t.add_value(row, col, val * a0)
+                .map_err(|e| crate::error::AnalysisError::from(
+                    assembly::error::AssemblyError::from(e)
+                ))?;
+        }
+
+        // Add (1+α) * a1 * C
+        if let Some(ref c) = self.damping {
+            let scale = (1.0 + self.alpha) * a1;
+            for (row, col, val) in c.iter_upper() {
+                system.k_t.add_value(row, col, val * scale)
+                    .map_err(|e| crate::error::AnalysisError::from(
+                        assembly::error::AssemblyError::from(e)
+                    ))?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn commit(&mut self) {
         self.prev_velocity     = self.velocity.clone();
         self.prev_acceleration = self.acceleration.clone();
