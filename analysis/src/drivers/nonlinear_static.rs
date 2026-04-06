@@ -96,6 +96,9 @@ pub struct StaticNonlinear {
 
     /// Pre-allocated analysis buffers (K_T, R, Δu, F_ext, F_int).
     system: GlobalSystem,
+
+    /// Post-processing recorders — triggered after each converged step.
+    recorders: Vec<Box<dyn crate::recorder::Recorder>>,
 }
 
 impl StaticNonlinear {
@@ -133,8 +136,9 @@ impl StaticNonlinear {
         let mut solver = CholeskySolver::new();
         solver.analyze(&k_pattern)?;
         let system = GlobalSystem::new(k_pattern);
+        let recorders = Vec::new();
 
-        Ok(Self { algorithm, integrator, solver, system })
+        Ok(Self { algorithm, integrator, solver, system, recorders })
     }
 
     /// Return a reference to the current analysis buffers.
@@ -147,6 +151,16 @@ impl StaticNonlinear {
     #[inline]
     pub fn current_lambda(&self) -> f64 {
         self.integrator.current_time()
+    }
+
+    /// Register a recorder to be triggered after each converged step.
+    pub fn add_recorder(&mut self, recorder: Box<dyn crate::recorder::Recorder>) {
+        self.recorders.push(recorder);
+    }
+
+    /// Access a recorder by index (for retrieving results after analysis).
+    pub fn recorder(&self, index: usize) -> Option<&dyn crate::recorder::Recorder> {
+        self.recorders.get(index).map(|r| r.as_ref())
     }
 }
 
@@ -181,6 +195,11 @@ impl AnalysisDriver for StaticNonlinear {
                 Ok(()) => {
                     // ── 3. Success: commit the integrator state ──────────
                     self.integrator.commit();
+                    // Trigger all recorders at the committed state
+                    let t = self.integrator.current_time();
+                    for rec in &mut self.recorders {
+                        rec.record(t, model);
+                    }
                 }
                 Err(AnalysisError::MaxIterationsReached { iterations, norm }) => {
                     // Soft failure: Newton did not converge.

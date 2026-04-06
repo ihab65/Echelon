@@ -104,6 +104,7 @@ pub mod convergence;
 pub mod algorithms;
 pub mod integrators;
 pub mod drivers;
+pub mod recorder;
 
 // -----------------------------------------------------------------
 // Flat re-exports — the most commonly imported items
@@ -115,3 +116,4 @@ pub use convergence::ConvergenceTest;
 pub use algorithms::EquiSolnAlgo;
 pub use integrators::Integrator;
 pub use drivers::AnalysisDriver;
+pub use recorder::Recorder;

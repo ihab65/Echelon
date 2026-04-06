@@ -67,6 +67,9 @@ pub struct TransientDriver {
 
     /// Pre-allocated analysis buffers.
     system: GlobalSystem,
+
+    /// Post-processing recorders — triggered after each converged step.
+    recorders: Vec<Box<dyn crate::recorder::Recorder>>,
 }
 
 impl TransientDriver {
@@ -98,14 +101,25 @@ impl TransientDriver {
         let mut solver = CholeskySolver::new();
         solver.analyze(&k_pattern)?;
         let system = GlobalSystem::new(k_pattern);
+        let recorders = Vec::new();
 
-        Ok(Self { algorithm, integrator, solver, system })
+        Ok(Self { algorithm, integrator, solver, system, recorders })
     }
 
     /// Current simulation time.
     #[inline]
     pub fn current_time(&self) -> f64 {
         self.integrator.current_time()
+    }
+
+    /// Register a recorder to be triggered after each converged step.
+    pub fn add_recorder(&mut self, recorder: Box<dyn crate::recorder::Recorder>) {
+        self.recorders.push(recorder);
+    }
+
+    /// Access a recorder by index (for retrieving results after analysis).
+    pub fn recorder(&self, index: usize) -> Option<&dyn crate::recorder::Recorder> {
+        self.recorders.get(index).map(|r| r.as_ref())
     }
 }
 
@@ -131,6 +145,11 @@ impl AnalysisDriver for TransientDriver {
             ) {
                 Ok(()) => {
                     self.integrator.commit();
+                    // Trigger all recorders at the committed state
+                    let t = self.integrator.current_time();
+                    for rec in &mut self.recorders {
+                        rec.record(t, model);
+                    }
                 }
                 Err(AnalysisError::MaxIterationsReached { iterations, norm }) => {
                     self.integrator.revert();
