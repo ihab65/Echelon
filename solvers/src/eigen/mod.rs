@@ -40,6 +40,9 @@
 //! }
 //! ```
 
+pub mod lanczos;
+pub use lanczos::LanczosEigenSolver;
+
 use sparse::SymCsrMatrix;
 use crate::error::Result;
 

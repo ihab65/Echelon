@@ -22,3 +22,4 @@ pub use linear::CholeskySolver;
 pub use linear::LdltSolver;
 
 pub use eigen::{EigenSolver, EigenResult};
+pub use eigen::LanczosEigenSolver;
