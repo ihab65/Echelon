@@ -170,7 +170,7 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     /// symbolic pattern from `analyze` is reused — no pattern work is repeated.
     fn factorize(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotAnalyzed)?;
-        let sym  = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
+        let sym = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
 
         let k_perm = perm.permute_sym(k)?;
         let k_csc  = sym_to_csc(&k_perm);

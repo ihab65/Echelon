@@ -41,6 +41,7 @@ use crate::error::{Result, ElementError};
 ///
 /// ```rust
 /// use elements::Element;
+/// use materials::ElasticUniaxial;
 /// use elements::Truss2d;
 /// use fem_core::NodeId;
 ///
@@ -49,10 +50,10 @@ use crate::error::{Result, ElementError};
 ///     NodeId(0), NodeId(1),
 ///     0.0, 0.0,   // node 1 coordinates
 ///     2.0, 0.0,   // node 2 coordinates
-///     200e9,      // E (Pa)
+///     ElasticUniaxial::new(200e9, None).unwrap(),      // E (Pa)
 ///     0.01,       // A (m²)
 /// );
-/// assert_eq!(truss.n_dof(), 4);
+/// assert_eq!(truss.unwrap().n_dof(), 4);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Truss2d {

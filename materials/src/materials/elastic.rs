@@ -30,7 +30,7 @@ use std::ops::{Add, Mul};
 /// use materials::ElasticUniaxial;
 /// use materials::traits::UniaxialMaterial;
 ///
-/// let mut mat = ElasticUniaxial::new(200e9);  // steel: E = 200 GPa
+/// let mut mat = ElasticUniaxial::new(200e9, None).unwrap();  // steel: E = 200 GPa
 /// let sigma = mat.stress(0.001);             // σ = 200 MPa
 /// assert!((sigma - 200e6).abs() < 1.0);
 /// ```

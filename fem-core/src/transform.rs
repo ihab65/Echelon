@@ -170,7 +170,7 @@ impl<T: SparseScalar> CoordTransf2d<T> {
     ///
     /// let t = CoordTransf2d::from_nodes(0.0, 0.0, 1.0, 0.0); // horizontal
     /// let ke_local = [[0.0_f64; 6]; 6]; // zero stiffness for illustration
-    /// let ke_global = t.transform_stiffness_6x6(&ke_local);
+    /// let ke_global = t.unwrap().transform_stiffness_6x6(&ke_local);
     /// assert_eq!(ke_global, [[0.0; 6]; 6]);
     /// ```
     pub fn transform_stiffness_6x6(&self, ke_local: &[[T; 6]; 6]) -> [[T; 6]; 6] {

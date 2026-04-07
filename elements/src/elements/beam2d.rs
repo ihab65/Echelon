@@ -47,6 +47,7 @@ use crate::error::{Result, ElementError};
 /// ```rust
 /// use fem_core::NodeId;
 /// use elements::Element;
+/// use materials::ElasticUniaxial;
 /// use elements::ElasticBeam2d;
 ///
 /// // Horizontal 2m cantilever beam, steel-like properties
@@ -54,11 +55,11 @@ use crate::error::{Result, ElementError};
 ///     NodeId(0), NodeId(1),
 ///     0.0, 0.0,   // node 1
 ///     2.0, 0.0,   // node 2
-///     200e9,      // E (Pa)
+///     ElasticUniaxial::new(200e9, None).unwrap(),      // E (Pa)
 ///     0.01,       // A (m²)
 ///     1e-4,       // Iz (m⁴)
 /// );
-/// assert_eq!(beam.n_dof(), 6);
+/// assert_eq!(beam.unwrap().n_dof(), 6);
 /// ```
 #[derive(Debug, Clone)]
 pub struct ElasticBeam2d {
