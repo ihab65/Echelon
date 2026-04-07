@@ -23,7 +23,7 @@
 //! will overwrite those entries with the prescribed displacement immediately
 //! after, so over-writing is harmless.
 
-use fem_core::NodeId;
+use fem_core::{ElemId, NodeId};
 use elements::traits::ElementLoadParams;
 
 use crate::loads::series::TimeSeries;
@@ -179,7 +179,7 @@ unsafe impl Sync for NodalLoad {}
 /// ```
 pub struct ElementLoad {
     /// Index of the target element (returned by [`Model::add_element_typed`]).
-    pub elem_id: usize,
+    pub elem_id: ElemId,
     /// Load type and magnitude.
     pub params: ElementLoadParams,
     /// Temporal scaling rule.
@@ -193,7 +193,7 @@ impl LoadPattern for ElementLoad {
         model:       &Model,
         f_ext:       &mut [f64],
     ) {
-        let Some(elem) = model.elements.get(self.elem_id) else {
+        let Some(elem) = model.elements.get(self.elem_id.0) else {
             // Element index out of range — silently skip rather than panic.
             // This can only happen if the user provides an invalid elem_id,
             // which should be caught in a future validation pass.

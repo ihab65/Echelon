@@ -895,8 +895,8 @@ fn test_add_element_returns_id() {
             mat, 0.01, 1e-4).unwrap()
     );
 
-    assert_eq!(id0, 0);
-    assert_eq!(id1, 1);
+    assert_eq!(id0.0, 0);
+    assert_eq!(id1.0, 1);
     assert_eq!(model.n_elements(), 2);
 }
 

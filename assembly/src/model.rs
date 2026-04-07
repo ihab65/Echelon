@@ -33,7 +33,7 @@
 //! operates on a model takes `&Model` or `&mut Model` — there is no global
 //! domain, no global tag registry, and no global counter anywhere in this crate.
 
-use fem_core::{ModelDim, NodeId};
+use fem_core::{ElemId, ModelDim, NodeId};
 use elements::Assembleable;
 
 use crate::constraints::SpConstraint;
@@ -180,18 +180,18 @@ impl Model {
     /// present in `self.nodes`. Validation happens lazily at assembly time
     /// (via `DofMap::validate_against`) rather than here, to avoid the cost
     /// of checking every element at add-time in population runs.
-    pub fn add_element(&mut self, element: Box<dyn Assembleable>) -> usize {
+    pub fn add_element(&mut self, element: Box<dyn Assembleable>) -> ElemId {
         let id = self.elements.len();
         self.elements.push(element);
-        id
+        ElemId(id)
     }
 
     /// Convenience wrapper: add an element from any concrete type that
     /// implements `Assembleable`.
-    pub fn add_element_typed<E: Assembleable + 'static>(&mut self, element: E) -> usize {
+    pub fn add_element_typed<E: Assembleable + 'static>(&mut self, element: E) -> ElemId {
         let id = self.elements.len();
         self.elements.push(Box::new(element));
-        id
+        ElemId(id)
     }
 
     /// Add a Dirichlet boundary condition.
