@@ -19,5 +19,6 @@ pub use error::{SolverError, Result};
 
 pub use linear::LinearSolver;
 pub use linear::CholeskySolver;
+pub use linear::LdltSolver;
 
 pub use eigen::{EigenSolver, EigenResult};

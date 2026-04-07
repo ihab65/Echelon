@@ -22,8 +22,10 @@
 //! in sequence and is the correct entry point for a fresh solve.
 
 pub mod cholesky;
+pub mod ldlt;
 
 pub use cholesky::CholeskySolver;
+pub use ldlt::LdltSolver;
 
 use sparse::{SparseScalar, SymCsrMatrix};
 use crate::error::Result;
