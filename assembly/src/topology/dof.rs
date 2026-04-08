@@ -98,7 +98,7 @@ mod tests {
             0.0, 0.0, 1.0, 0.0,
             mat, 0.01,
         ).unwrap();
-        m.add_element_typed(elem);
+        m.add_element(elem);
         m.build_state();
         m
     }

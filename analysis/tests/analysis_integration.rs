@@ -100,7 +100,7 @@ fn test_linear_static_single_truss() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a).unwrap()
     );
 
@@ -111,7 +111,7 @@ fn test_linear_static_single_truss() {
     model.add_constraint(SpConstraint::new(NodeId(1), 1, 0.0, ndf)).unwrap();
 
     // Axial load P at node 1
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id:         NodeId(1),
         reference_loads: vec![p, 0.0],
         series:          Box::new(ConstantSeries),
@@ -152,7 +152,7 @@ fn test_nonlinear_static_cantilever_beam_newton() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -163,7 +163,7 @@ fn test_nonlinear_static_cantilever_beam_newton() {
     }
 
     // Downward point load at node 1
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id:         NodeId(1),
         reference_loads: vec![0.0, -p, 0.0],
         series:          Box::new(ConstantSeries),
@@ -216,10 +216,10 @@ fn test_nonlinear_static_fixed_fixed_beam() {
         model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(2), l,       0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0, steel(), a, iz).unwrap()
     );
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), l/2.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -232,7 +232,7 @@ fn test_nonlinear_static_fixed_fixed_beam() {
     }
 
     // Downward load at midspan node 1
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id:         NodeId(1),
         reference_loads: vec![0.0, -p, 0.0],
         series:          Box::new(ConstantSeries),
@@ -279,10 +279,10 @@ fn test_nonlinear_static_simply_supported_beam() {
         model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(2), l,       0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0, steel(), a, iz).unwrap()
     );
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), l/2.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -293,7 +293,7 @@ fn test_nonlinear_static_simply_supported_beam() {
     // Node 2: roller — fix UY only
     model.add_constraint(SpConstraint::new(NodeId(2), 1, 0.0, ndf)).unwrap();
 
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id:         NodeId(1),
         reference_loads: vec![0.0, -p, 0.0],
         series:          Box::new(ConstantSeries),
@@ -334,7 +334,7 @@ fn test_multi_step_load_control_cantilever() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -343,7 +343,7 @@ fn test_multi_step_load_control_cantilever() {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
 
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id:         NodeId(1),
         reference_loads: vec![0.0, -p, 0.0],
         series:          Box::new(ConstantSeries),
@@ -385,7 +385,7 @@ fn test_modified_newton_matches_full_newton() {
         let mut model = Model::new(ModelDim::frame_2d());
             model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
             model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-        model.add_element_typed(
+        model.add_element(
             ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
                 ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
         );
@@ -393,7 +393,8 @@ fn test_modified_newton_matches_full_newton() {
         for dof in 0..ndf {
             model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
         }
-        model.add_load_typed(NodalLoad {
+        model.add_load
+(NodalLoad {
             node_id:         NodeId(1),
             reference_loads: vec![0.0, -p, 0.0],
             series:          Box::new(ConstantSeries),
@@ -449,14 +450,14 @@ fn test_energy_increment_convergence() {
     let mut model = Model::new(ModelDim::frame_2d());
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
     let ndf = 3;
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id:         NodeId(1),
         reference_loads: vec![0.0, -p, 0.0],
         series:          Box::new(ConstantSeries),
@@ -495,10 +496,10 @@ fn test_singular_model_does_not_panic() {
     let mut model = Model::new(ModelDim::truss_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a).unwrap()
     );
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id:         NodeId(1),
         reference_loads: vec![p, 0.0],
         series:          Box::new(ConstantSeries),
@@ -609,7 +610,7 @@ fn test_newmark_form_tangent_augments_stiffness() {
     let mut model = Model::new(ModelDim::truss_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
     );
@@ -661,7 +662,7 @@ fn test_hht_form_tangent_scales_stiffness() {
     let mut model = Model::new(ModelDim::truss_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
     );
@@ -723,7 +724,7 @@ fn test_element_load_uniform_cantilever() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    let elem_id = model.add_element_typed(
+    let elem_id = model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -734,7 +735,7 @@ fn test_element_load_uniform_cantilever() {
     }
 
     // Uniform downward distributed load via ElementLoad
-    model.add_load_typed(ElementLoad {
+    model.add_load(ElementLoad {
         elem_id,
         params: ElementLoadParams::Uniform { wx: 0.0, wy: w },
         series: Box::new(ConstantSeries),
@@ -781,11 +782,11 @@ fn test_element_load_midspan_point() {
         model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(2), l, 0.0, 0.0)).unwrap();
 
-    let elem0 = model.add_element_typed(
+    let elem0 = model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
-    let elem1 = model.add_element_typed(
+    let elem1 = model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), l/2.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -819,7 +820,7 @@ fn test_element_load_midspan_point() {
     // at xi=1.0 on elem0 which means node 1 receives the full point load.
     // This is identical to a NodalLoad at node 1 — compare against that.
 
-    model.add_load_typed(ElementLoad {
+    model.add_load(ElementLoad {
         elem_id: elem0,
         params: ElementLoadParams::Point { px: 0.0, py: p, xi: 1.0 },
         series: Box::new(ConstantSeries),
@@ -876,7 +877,7 @@ fn test_load_combo_scale() {
 }
 
 // =============================================================================
-// TEST 17 — add_element_typed returns stable IDs
+// TEST 17 — add_element returns stable IDs
 // =============================================================================
 #[test]
 fn test_add_element_returns_id() {
@@ -886,11 +887,11 @@ fn test_add_element_returns_id() {
     model.add_node(Node::new(NodeId(2), 2.0, 0.0, 0.0)).unwrap();
 
     let mat = ElasticUniaxial::new(200e9, None).unwrap();
-    let id0 = model.add_element_typed(
+    let id0 = model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 1.0, 0.0,
             mat.clone(), 0.01, 1e-4).unwrap()
     );
-    let id1 = model.add_element_typed(
+    let id1 = model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), 1.0, 0.0, 2.0, 0.0,
             mat, 0.01, 1e-4).unwrap()
     );
@@ -972,7 +973,7 @@ fn test_node_recorder_pushover() {
     let mut model = Model::new(ModelDim::frame_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -980,7 +981,7 @@ fn test_node_recorder_pushover() {
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id: NodeId(1),
         reference_loads: vec![0.0, -p, 0.0],
         series: Box::new(LinearSeries),
@@ -1034,7 +1035,7 @@ fn test_compute_reactions_cantilever() {
     let mut model = Model::new(ModelDim::frame_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -1042,7 +1043,7 @@ fn test_compute_reactions_cantilever() {
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load_typed(NodalLoad {
+    model.add_load(NodalLoad {
         node_id: NodeId(1),
         reference_loads: vec![0.0, -p, 0.0],
         series: Box::new(ConstantSeries),
@@ -1086,7 +1087,7 @@ fn test_build_rayleigh_damping() {
     let mut model = Model::new(ModelDim::frame_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(7850.0)).unwrap(), a, 1e-4).unwrap()
     );

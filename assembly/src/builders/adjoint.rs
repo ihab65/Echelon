@@ -158,7 +158,7 @@ mod tests {
         let mut m = Model::new(ModelDim::truss_2d());
         m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
-        m.add_element_typed(
+        m.add_element(
             Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, steel(), 0.01).unwrap()
         );
         m.build_state();
@@ -228,14 +228,14 @@ mod tests {
         m.add_node(Node::new(NodeId(2), 4.0, 0.0, 0.0)).unwrap();
 
         // Beam connecting node 0 and node 1 (3 params: E, A, Iz)
-        m.add_element_typed(
+        m.add_element(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,
                 steel(), 0.01, 1e-4,
             ).unwrap()
         );
         // Beam connecting node 1 and node 2 (another 3 params)
-        m.add_element_typed(
+        m.add_element(
             ElasticBeam2d::new(
                 NodeId(1), NodeId(2), 2.0, 0.0, 4.0, 0.0,
                 steel(), 0.01, 1e-4,

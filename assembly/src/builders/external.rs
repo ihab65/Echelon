@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn constant_nodal_load_at_pseudo_time_1() {
         let mut m = frame_two_nodes();
-        m.add_load_typed(NodalLoad {
+        m.add_load(NodalLoad {
             node_id:         NodeId(1),
             reference_loads: vec![0.0, -50e3, 0.0],
             series:          Box::new(ConstantSeries),
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn linear_load_scales_with_pseudo_time() {
         let mut m = frame_two_nodes();
-        m.add_load_typed(NodalLoad {
+        m.add_load(NodalLoad {
             node_id:         NodeId(0),
             reference_loads: vec![100e3, 0.0, 0.0],
             series:          Box::new(LinearSeries),
@@ -153,7 +153,7 @@ mod tests {
         let mut m = frame_two_nodes();
         m.p_base = Some(vec![0.0, -10e3, 0.0, 0.0, -10e3, 0.0]);
 
-        m.add_load_typed(NodalLoad {
+        m.add_load(NodalLoad {
             node_id:         NodeId(1),
             reference_loads: vec![0.0, -50e3, 0.0],
             series:          Box::new(ConstantSeries),
@@ -173,12 +173,12 @@ mod tests {
     #[test]
     fn two_patterns_accumulate_at_same_node() {
         let mut m = frame_two_nodes();
-        m.add_load_typed(NodalLoad {
+        m.add_load(NodalLoad {
             node_id:         NodeId(0),
             reference_loads: vec![30e3, 0.0, 0.0],
             series:          Box::new(ConstantSeries),
         });
-        m.add_load_typed(NodalLoad {
+        m.add_load(NodalLoad {
             node_id:         NodeId(0),
             reference_loads: vec![20e3, 0.0, 0.0],
             series:          Box::new(ConstantSeries),
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn second_call_does_not_accumulate() {
         let mut m = frame_two_nodes();
-        m.add_load_typed(NodalLoad {
+        m.add_load(NodalLoad {
             node_id:         NodeId(0),
             reference_loads: vec![100e3, 0.0, 0.0],
             series:          Box::new(ConstantSeries),

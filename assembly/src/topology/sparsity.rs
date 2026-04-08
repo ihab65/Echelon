@@ -88,7 +88,7 @@ mod tests {
         m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         let e = Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, steel(), 0.01).unwrap();
-        m.add_element_typed(e);
+        m.add_element(e);
         m.build_state();
         m
     }
@@ -135,7 +135,7 @@ mod tests {
             0.0, 0.0, 3.0, 0.0,
             steel(), 0.01, 1e-4,
         ).unwrap();
-        m.add_element_typed(e);
+        m.add_element(e);
         m.build_state();
         m
     }
@@ -172,8 +172,8 @@ mod tests {
         let e2 = ElasticBeam2d::new(
             NodeId(1), NodeId(2), 3.0, 0.0, 6.0, 0.0, steel(), 0.01, 1e-4,
         ).unwrap();
-        m.add_element_typed(e1);
-        m.add_element_typed(e2);
+        m.add_element(e1);
+        m.add_element(e2);
         m.build_state();
 
         let k = build_pattern(&m).unwrap();

@@ -181,19 +181,11 @@ impl Model {
     /// The element must have been constructed with `NodeId`s that are already
     /// present in `self.nodes`. Validation happens lazily at assembly time
     /// (via `DofMap::validate_against`) rather than here, to avoid the cost
-    /// of checking every element at add-time in population runs.
-    pub fn add_element(&mut self, element: Box<dyn Assembleable>) -> ElemId {
-        let id = self.elements.len();
-        self.elements.push(element);
-        ElemId(id)
-    }
-
-    /// Convenience wrapper: add an element from any concrete type that
-    /// implements `Assembleable`.
-    pub fn add_element_typed<E: Assembleable + 'static>(&mut self, element: E) -> ElemId {
-        let id = self.elements.len();
+    /// of checking every element at add-time in population runs
+    pub fn add_element<E: Assembleable + 'static>(&mut self, element: E) -> ElemId {
+        let id = ElemId(self.elements.len());
         self.elements.push(Box::new(element));
-        ElemId(id)
+        id
     }
 
     /// Add a Dirichlet boundary condition.
@@ -214,12 +206,7 @@ impl Model {
     }
 
     /// Add a load pattern to the active load queue.
-    pub fn add_load(&mut self, load: Box<dyn LoadPattern>) {
-        self.loads.push(load);
-    }
-
-    /// Convenience wrapper: add a load from any concrete type.
-    pub fn add_load_typed<L: LoadPattern + 'static>(&mut self, load: L) {
+    pub fn add_load<L: LoadPattern + 'static>(&mut self, load: L) {
         self.loads.push(Box::new(load));
     }
 

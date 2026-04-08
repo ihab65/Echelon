@@ -112,7 +112,7 @@ mod tests {
             0.0, 0.0, 1.0, 0.0,
             mat, 0.01,
         ).unwrap();
-        m.add_element_typed(truss);
+        m.add_element(truss);
 
         // Fix node 0 (both DOFs)
         m.add_constraint(SpConstraint::new(NodeId(0), 0, 0.0, 2)).unwrap();
