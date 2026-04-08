@@ -90,8 +90,8 @@ mod tests {
 
     fn two_node_truss_model() -> Model {
         let mut m = Model::new(ModelDim::truss_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 1.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 1.0, 0.0, 0.0)).unwrap();
         let mat  = ElasticUniaxial::new(200e9, None).unwrap();
         let elem = Truss2d::new(
             NodeId(0), NodeId(1),

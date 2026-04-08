@@ -250,16 +250,16 @@ mod tests {
 
     fn frame_model_2nodes() -> Model {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
         m.build_state();
         m
     }
 
     fn truss_model_2nodes() -> Model {
         let mut m = Model::new(ModelDim::truss_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
         m.build_state();
         m
     }

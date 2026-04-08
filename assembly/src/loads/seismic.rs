@@ -228,8 +228,8 @@ mod tests {
         use crate::model::{Model, Node};
 
         let mut model = Model::new(ModelDim::frame_2d());
-        model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        model.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         model.add_element_typed(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,
@@ -258,8 +258,8 @@ mod tests {
         use crate::model::{Model, Node};
 
         let mut model = Model::new(ModelDim::frame_2d());
-        model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        model.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         model.add_element_typed(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,

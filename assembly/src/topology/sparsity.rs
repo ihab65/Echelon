@@ -85,8 +85,8 @@ mod tests {
 
     fn two_node_truss() -> Model {
         let mut m = Model::new(ModelDim::truss_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         let e = Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, steel(), 0.01).unwrap();
         m.add_element_typed(e);
         m.build_state();
@@ -128,8 +128,8 @@ mod tests {
 
     fn two_node_beam() -> Model {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
         let e = ElasticBeam2d::new(
             NodeId(0), NodeId(1),
             0.0, 0.0, 3.0, 0.0,
@@ -163,9 +163,9 @@ mod tests {
     fn multi_element_pattern_valid() {
         // Two beams in series: node 0 – node 1 – node 2
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(2), 6.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(2), 6.0, 0.0, 0.0)).unwrap();
         let e1 = ElasticBeam2d::new(
             NodeId(0), NodeId(1), 0.0, 0.0, 3.0, 0.0, steel(), 0.01, 1e-4,
         ).unwrap();

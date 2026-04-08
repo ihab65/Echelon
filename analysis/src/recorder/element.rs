@@ -98,8 +98,8 @@ mod tests {
 
     fn cantilever_model() -> Model {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         m.add_element_typed(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,

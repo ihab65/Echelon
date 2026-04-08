@@ -62,12 +62,14 @@ pub struct Node {
     pub x: f64,
     /// Y coordinate (m).
     pub y: f64,
+    /// Z coordinate (m).
+    pub z: f64,
 }
 
 impl Node {
-    /// Create a 2D node at `(x, y)`.
-    pub fn new(id: NodeId, x: f64, y: f64) -> Self {
-        Self { id, x, y }
+    /// Create a node at `(x, y, z)`.
+    pub fn new(id: NodeId, x: f64, y: f64, z: f64) -> Self {
+        Self { id, x, y, z }
     }
 }
 
@@ -454,8 +456,8 @@ mod tests {
     #[test]
     fn add_node_sequential_ok() {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
         assert_eq!(m.n_nodes(), 2);
         assert_eq!(m.n_dof(), 6); // 2 nodes × 3 DOF
     }
@@ -463,16 +465,16 @@ mod tests {
     #[test]
     fn add_node_gap_errors() {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         // Skipping NodeId(1) — should error
-        let err = m.add_node(Node::new(NodeId(2), 6.0, 0.0)).unwrap_err();
+        let err = m.add_node(Node::new(NodeId(2), 6.0, 0.0, 0.0)).unwrap_err();
         assert!(matches!(err, AssemblyError::UnresolvedNode { node_id: 2 }));
     }
 
     #[test]
     fn add_constraint_dof_overflow() {
         let mut m = Model::new(ModelDim::truss_2d()); // ndf = 2
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         let c = SpConstraint {
             node_id:          NodeId(0),
             local_dof:        2, // DOF 2 doesn't exist in a 2-DOF truss
@@ -489,8 +491,8 @@ mod tests {
     #[test]
     fn build_state_sizes_u_global() {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
         m.build_state();
         assert_eq!(m.u_global.len(), 6);
         assert!(m.u_global.iter().all(|&v| v == 0.0));
@@ -499,7 +501,7 @@ mod tests {
     #[test]
     fn has_node_correct() {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         assert!(m.has_node(NodeId(0)));
         assert!(!m.has_node(NodeId(1)));
     }

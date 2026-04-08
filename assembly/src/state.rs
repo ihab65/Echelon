@@ -103,8 +103,8 @@ mod tests {
     /// Build a minimal 2-node truss model: node 0 fixed, node 1 free.
     fn two_node_truss() -> Model {
         let mut m = Model::new(ModelDim::truss_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 1.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 1.0, 0.0, 0.0)).unwrap();
 
         let mat = ElasticUniaxial::new(200e9, None).unwrap();
         let truss = Truss2d::new(

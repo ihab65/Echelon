@@ -93,8 +93,8 @@ mod tests {
 
     fn two_node_truss() -> (Model, SymCsrMatrix<f64>) {
         let mut m = Model::new(ModelDim::truss_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         m.add_element_typed(
             Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, steel(), 0.01).unwrap()
         );
@@ -141,8 +141,8 @@ mod tests {
 
     fn two_node_beam() -> (Model, SymCsrMatrix<f64>) {
         let mut m = Model::new(ModelDim::frame_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         m.add_element_typed(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,

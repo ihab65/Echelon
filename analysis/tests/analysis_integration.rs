@@ -97,8 +97,8 @@ fn test_linear_static_single_truss() {
     let p = 50e3_f64;
 
     let mut model = Model::new(ModelDim::truss_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
     model.add_element_typed(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a).unwrap()
@@ -149,8 +149,8 @@ fn test_nonlinear_static_cantilever_beam_newton() {
     let p  = 10e3_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
@@ -212,9 +212,9 @@ fn test_nonlinear_static_fixed_fixed_beam() {
     let p  = 20e3_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0,     0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l / 2.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(2), l,       0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0,     0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(2), l,       0.0, 0.0)).unwrap();
 
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0, steel(), a, iz).unwrap()
@@ -275,9 +275,9 @@ fn test_nonlinear_static_simply_supported_beam() {
     let p  = 15e3_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0,     0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l / 2.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(2), l,       0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0,     0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(2), l,       0.0, 0.0)).unwrap();
 
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0, steel(), a, iz).unwrap()
@@ -331,8 +331,8 @@ fn test_multi_step_load_control_cantilever() {
     let p  = 10e3_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
@@ -383,8 +383,8 @@ fn test_modified_newton_matches_full_newton() {
 
     let make_model = || {
         let mut model = Model::new(ModelDim::frame_2d());
-        model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+            model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+            model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
         model.add_element_typed(
             ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
                 ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
@@ -405,8 +405,8 @@ fn test_modified_newton_matches_full_newton() {
     // Full Newton
     let mut model_nr = make_model();
     {
-        let test  = Box::new(NormUnbalance::new(1e-8));
-        let algo  = Box::new(NewtonRaphson::new(test, 25));
+        let test = Box::new(NormUnbalance::new(1e-8));
+        let algo = Box::new(NewtonRaphson::new(test, 25));
         let integ = Box::new(LoadControl::new(1.0));
         let mut driver = StaticNonlinear::new(algo, integ, &model_nr).unwrap();
         driver.analyze(&mut model_nr, 1).unwrap();
@@ -447,8 +447,8 @@ fn test_energy_increment_convergence() {
     let p  = 10e3_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
@@ -493,8 +493,8 @@ fn test_singular_model_does_not_panic() {
 
     // No boundary conditions → K is singular
     let mut model = Model::new(ModelDim::truss_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
     model.add_element_typed(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a).unwrap()
     );
@@ -538,7 +538,7 @@ fn test_singular_model_does_not_panic() {
 #[test]
 fn test_linear_static_rejects_empty_model() {
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     // No elements added
     model.build_state();
 
@@ -555,8 +555,8 @@ fn test_linear_static_rejects_empty_model() {
 fn test_static_nonlinear_rejects_model_with_no_nodes() {
     let model = Model::new(ModelDim::frame_2d()); // empty: no nodes, no elements
 
-    let test       = Box::new(NormUnbalance::new(1e-6));
-    let algorithm  = Box::new(NewtonRaphson::new(test, 10));
+    let test = Box::new(NormUnbalance::new(1e-6));
+    let algorithm = Box::new(NewtonRaphson::new(test, 10));
     let integrator = Box::new(LoadControl::new(1.0));
 
     let result = StaticNonlinear::new(algorithm, integrator, &model);
@@ -607,8 +607,8 @@ fn test_newmark_form_tangent_augments_stiffness() {
     let l = 1.0_f64;
 
     let mut model = Model::new(ModelDim::truss_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
     model.add_element_typed(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
@@ -659,8 +659,8 @@ fn test_hht_form_tangent_scales_stiffness() {
     let dt    = 0.05_f64;
 
     let mut model = Model::new(ModelDim::truss_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
     model.add_element_typed(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
@@ -720,8 +720,8 @@ fn test_element_load_uniform_cantilever() {
     let w  = -10e3_f64; // N/m downward
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l,   0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
     let elem_id = model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
@@ -777,9 +777,9 @@ fn test_element_load_midspan_point() {
     let p  = -20e3_f64; // N downward
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l / 2.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(2), l, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
+        model.add_node(Node::new(NodeId(2), l, 0.0, 0.0)).unwrap();
 
     let elem0 = model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0,
@@ -851,8 +851,8 @@ fn test_load_combo_scale() {
     use assembly::loads::combo::LoadCombo;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
     model.build_state();
 
     let mut combo = LoadCombo::new(1.35);
@@ -881,9 +881,9 @@ fn test_load_combo_scale() {
 #[test]
 fn test_add_element_returns_id() {
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), 1.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(2), 2.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), 1.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(2), 2.0, 0.0, 0.0)).unwrap();
 
     let mat = ElasticUniaxial::new(200e9, None).unwrap();
     let id0 = model.add_element_typed(
@@ -906,8 +906,8 @@ fn test_add_element_returns_id() {
 #[test]
 fn test_bake_load_and_clear() {
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
     model.build_state();
 
     assert!(!model.has_baked_loads());
@@ -938,8 +938,8 @@ fn test_echelon_model_macro() {
 
     let model = echelon_model! {
         nodes: [
-            { id: 0, x: 0.0, y: 0.0 },
-            { id: 1, x: 2.0, y: 0.0 },
+            { id: 0, x: 0.0, y: 0.0, z: 0.0 },
+            { id: 1, x: 2.0, y: 0.0, z: 0.0 },
         ],
         materials: [
             { id: steel, E: 200e9 },
@@ -970,8 +970,8 @@ fn test_node_recorder_pushover() {
     let p = 1e3_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
@@ -1032,8 +1032,8 @@ fn test_compute_reactions_cantilever() {
     let l = 2.0_f64; let p = 10e3_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
@@ -1084,8 +1084,8 @@ fn test_build_rayleigh_damping() {
     let e = 200e9_f64; let a = 0.01_f64; let l = 2.0_f64;
 
     let mut model = Model::new(ModelDim::frame_2d());
-    model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-    model.add_node(Node::new(NodeId(1), l, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+    model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
     model.add_element_typed(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(7850.0)).unwrap(), a, 1e-4).unwrap()

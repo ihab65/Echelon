@@ -66,8 +66,8 @@ macro_rules! point_load {
 /// let model = echelon_model! {
 ///     dim: Frame2d,               // Frame2d (default) or Truss2d
 ///     nodes: [
-///         { id: 0, x: 0.0, y: 0.0 },
-///         { id: 1, x: 0.0, y: 3.0 },
+///         { id: 0, x: 0.0, y: 0.0, z: 0.0 },
+///         { id: 1, x: 0.0, y: 3.0, z: 0.0 },
 ///     ],
 ///     materials: [
 ///         { id: steel, E: 200e9 },
@@ -93,7 +93,7 @@ macro_rules! echelon_model {
     // Entry point — parse all sections
     (
         $(dim: $dim:ident,)?
-        nodes: [ $({ id: $nid:expr, x: $nx:expr, y: $ny:expr }),* $(,)? ],
+        nodes: [ $({ id: $nid:expr, x: $nx:expr, y: $ny:expr, z: $nz:expr }),* $(,)? ],
         materials: [ $({ id: $mid:ident $(, E: $me:expr)? $(, rho: $mrho:expr)? }),* $(,)? ],
         elements: [
             $({ type: $etype:ident, nodes: [$en0:expr, $en1:expr],
@@ -117,7 +117,9 @@ macro_rules! echelon_model {
 
         // Add nodes
         $(
-            _model.add_node(Node::new(NodeId($nid), $nx as f64, $ny as f64)).unwrap();
+            _model.add_node(Node::new(
+                NodeId($nid), $nx as f64, $ny as f64, $nz as f64
+            )).unwrap();
         )*
 
         // Build a material map: identifier → ElasticUniaxial

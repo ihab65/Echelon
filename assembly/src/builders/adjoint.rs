@@ -156,8 +156,8 @@ mod tests {
 
     fn single_truss_model() -> Model {
         let mut m = Model::new(ModelDim::truss_2d());
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
         m.add_element_typed(
             Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0, steel(), 0.01).unwrap()
         );
@@ -223,9 +223,9 @@ mod tests {
 
     fn truss_beam_model() -> Model {
         let mut m = Model::new(ModelDim::frame_2d()); // beam needs 3 DOF/node
-        m.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(1), 2.0, 0.0)).unwrap();
-        m.add_node(Node::new(NodeId(2), 4.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
+        m.add_node(Node::new(NodeId(2), 4.0, 0.0, 0.0)).unwrap();
 
         // Beam connecting node 0 and node 1 (3 params: E, A, Iz)
         m.add_element_typed(

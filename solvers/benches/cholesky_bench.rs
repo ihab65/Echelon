@@ -59,6 +59,7 @@ struct ReadySolver {
 impl ReadySolver {
     fn new(k: &SymCsrMatrix<f64>) -> Self {
         let mut solver = SparseSolver::new();
+        solver.set_ordering(solvers::ordering::Ordering::Amd);
         solver.analyze_and_factorize(k).unwrap();
         Self { solver, n: k.n }
     }
