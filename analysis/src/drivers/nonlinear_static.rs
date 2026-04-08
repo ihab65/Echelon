@@ -116,11 +116,11 @@ impl StaticNonlinear {
     /// # Errors
     /// - [`AnalysisError::InvalidConfiguration`] if the model has no elements or DOFs.
     /// - Assembly or solver errors from pattern construction.
-    pub fn new(
-        algorithm:  Box<dyn EquiSolnAlgo>,
-        integrator: Box<dyn Integrator>,
-        model:      &Model,
-    ) -> Result<Self> {
+    pub fn new<A, I>(algorithm:  A, integrator: I, model: &Model) -> Result<Self> 
+        where 
+            A: EquiSolnAlgo + 'static, 
+            I: Integrator + 'static
+    {
         if model.n_elements() == 0 {
             return Err(AnalysisError::InvalidConfiguration {
                 reason: "StaticNonlinear: the model has no elements.".to_string(),
@@ -138,7 +138,13 @@ impl StaticNonlinear {
         let system = GlobalSystem::new(k_pattern);
         let recorders = Vec::new();
 
-        Ok(Self { algorithm, integrator, solver, system, recorders })
+        Ok(Self { 
+            algorithm: Box::new(algorithm), 
+            integrator: Box::new(integrator), 
+            solver, 
+            system, 
+            recorders 
+        })
     }
 
     /// Return a reference to the current analysis buffers.

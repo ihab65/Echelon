@@ -43,6 +43,8 @@
 //! - Two-step load control pushover (verify incremental assembly)
 //! - Modified Newton convergence on a linear problem (same result as full Newton)
 
+use std::vec;
+
 use fem_core::{ModelDim, NodeId};
 use materials::ElasticUniaxial;
 use elements::{Truss2d, ElasticBeam2d};
@@ -100,7 +102,7 @@ fn test_linear_static_single_truss() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a).unwrap()
     );
 
@@ -111,11 +113,13 @@ fn test_linear_static_single_truss() {
     model.add_constraint(SpConstraint::new(NodeId(1), 1, 0.0, ndf)).unwrap();
 
     // Axial load P at node 1
-    model.add_load_typed(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(
+        NodalLoad::new(
+            NodeId(1), 
+            vec![p, 0.0], 
+            ConstantSeries
+        )
+    );
 
     model.build_state();
 
@@ -152,7 +156,7 @@ fn test_nonlinear_static_cantilever_beam_newton() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -163,17 +167,17 @@ fn test_nonlinear_static_cantilever_beam_newton() {
     }
 
     // Downward point load at node 1
-    model.add_load_typed(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
-    let algorithm = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(1.0)); // single full-load step
+    let test = NormUnbalance::new(1e-8);
+    let algorithm = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(1.0); // single full-load step
 
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     let ok = driver.analyze(&mut model, 1).unwrap();
@@ -216,10 +220,10 @@ fn test_nonlinear_static_fixed_fixed_beam() {
         model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(2), l,       0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0, steel(), a, iz).unwrap()
     );
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), l/2.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -232,17 +236,17 @@ fn test_nonlinear_static_fixed_fixed_beam() {
     }
 
     // Downward load at midspan node 1
-    model.add_load_typed(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
-    let algorithm = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(1.0));
+    let test = NormUnbalance::new(1e-8);
+    let algorithm = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(1.0);
 
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     let ok = driver.analyze(&mut model, 1).unwrap();
@@ -279,10 +283,10 @@ fn test_nonlinear_static_simply_supported_beam() {
         model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(2), l,       0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0, steel(), a, iz).unwrap()
     );
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), l/2.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -293,17 +297,17 @@ fn test_nonlinear_static_simply_supported_beam() {
     // Node 2: roller — fix UY only
     model.add_constraint(SpConstraint::new(NodeId(2), 1, 0.0, ndf)).unwrap();
 
-    model.add_load_typed(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
-    let algorithm = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(1.0));
+    let test = NormUnbalance::new(1e-8);
+    let algorithm = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(1.0);
 
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     let ok = driver.analyze(&mut model, 1).unwrap();
@@ -334,7 +338,7 @@ fn test_multi_step_load_control_cantilever() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
 
@@ -343,17 +347,17 @@ fn test_multi_step_load_control_cantilever() {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
 
-    model.add_load_typed(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1), 
+        vec![0.0, -p, 0.0], 
+        ConstantSeries
+    ));
 
     model.build_state();
 
-    let test       = Box::new(NormUnbalance::new(1e-8));
-    let algorithm  = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(0.1)); // 10 steps × Δλ = 0.1
+    let test = NormUnbalance::new(1e-8);
+    let algorithm = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(0.1); // 10 steps × Δλ = 0.1
 
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     let ok = driver.analyze(&mut model, 10).unwrap();
@@ -385,7 +389,7 @@ fn test_modified_newton_matches_full_newton() {
         let mut model = Model::new(ModelDim::frame_2d());
             model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
             model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-        model.add_element_typed(
+        model.add_element(
             ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
                 ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
         );
@@ -393,7 +397,8 @@ fn test_modified_newton_matches_full_newton() {
         for dof in 0..ndf {
             model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
         }
-        model.add_load_typed(NodalLoad {
+        model.add_load
+(NodalLoad {
             node_id:         NodeId(1),
             reference_loads: vec![0.0, -p, 0.0],
             series:          Box::new(ConstantSeries),
@@ -405,9 +410,9 @@ fn test_modified_newton_matches_full_newton() {
     // Full Newton
     let mut model_nr = make_model();
     {
-        let test = Box::new(NormUnbalance::new(1e-8));
-        let algo = Box::new(NewtonRaphson::new(test, 25));
-        let integ = Box::new(LoadControl::new(1.0));
+        let test = NormUnbalance::new(1e-8);
+        let algo = NewtonRaphson::new(test, 25);
+        let integ = LoadControl::new(1.0);
         let mut driver = StaticNonlinear::new(algo, integ, &model_nr).unwrap();
         driver.analyze(&mut model_nr, 1).unwrap();
     }
@@ -415,9 +420,9 @@ fn test_modified_newton_matches_full_newton() {
     // Modified Newton
     let mut model_mn = make_model();
     {
-        let test  = Box::new(NormUnbalance::new(1e-8));
-        let algo  = Box::new(ModifiedNewton::new(test, 50));
-        let integ = Box::new(LoadControl::new(1.0));
+        let test = NormUnbalance::new(1e-8);
+        let algo = ModifiedNewton::new(test, 50);
+        let integ = LoadControl::new(1.0);
         let mut driver = StaticNonlinear::new(algo, integ, &model_mn).unwrap();
         driver.analyze(&mut model_mn, 1).unwrap();
     }
@@ -449,24 +454,25 @@ fn test_energy_increment_convergence() {
     let mut model = Model::new(ModelDim::frame_2d());
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a, iz).unwrap()
     );
     let ndf = 3;
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load_typed(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
+
     model.build_state();
 
     // Use EnergyIncrement as the convergence criterion
-    let test       = Box::new(EnergyIncrement::new(1e-12));
-    let algorithm  = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(1.0));
+    let test = EnergyIncrement::new(1e-12);
+    let algorithm  = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(1.0);
 
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     let ok = driver.analyze(&mut model, 1).unwrap();
@@ -495,19 +501,20 @@ fn test_singular_model_does_not_panic() {
     let mut model = Model::new(ModelDim::truss_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a).unwrap()
     );
-    model.add_load_typed(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![p, 0.0],
+        ConstantSeries
+    ));
+
     model.build_state();
 
-    let test       = Box::new(NormUnbalance::new(1e-8));
-    let algorithm  = Box::new(NewtonRaphson::new(test, 5));
-    let integrator = Box::new(LoadControl::new(1.0));
+    let test = NormUnbalance::new(1e-8);
+    let algorithm  = NewtonRaphson::new(test, 5);
+    let integrator = LoadControl::new(1.0);
 
     let result = StaticNonlinear::new(algorithm, integrator, &model);
     match result {
@@ -555,9 +562,9 @@ fn test_linear_static_rejects_empty_model() {
 fn test_static_nonlinear_rejects_model_with_no_nodes() {
     let model = Model::new(ModelDim::frame_2d()); // empty: no nodes, no elements
 
-    let test = Box::new(NormUnbalance::new(1e-6));
-    let algorithm = Box::new(NewtonRaphson::new(test, 10));
-    let integrator = Box::new(LoadControl::new(1.0));
+    let test = NormUnbalance::new(1e-6);
+    let algorithm = NewtonRaphson::new(test, 10);
+    let integrator = LoadControl::new(1.0);
 
     let result = StaticNonlinear::new(algorithm, integrator, &model);
     assert!(result.is_err(), "StaticNonlinear::new should reject a model with no elements");
@@ -609,7 +616,7 @@ fn test_newmark_form_tangent_augments_stiffness() {
     let mut model = Model::new(ModelDim::truss_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
     );
@@ -661,7 +668,7 @@ fn test_hht_form_tangent_scales_stiffness() {
     let mut model = Model::new(ModelDim::truss_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(1.0)).unwrap(), a).unwrap()
     );
@@ -723,7 +730,7 @@ fn test_element_load_uniform_cantilever() {
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), l,   0.0, 0.0)).unwrap();
 
-    let elem_id = model.add_element_typed(
+    let elem_id = model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -734,17 +741,17 @@ fn test_element_load_uniform_cantilever() {
     }
 
     // Uniform downward distributed load via ElementLoad
-    model.add_load_typed(ElementLoad {
+    model.add_load(ElementLoad::new(
         elem_id,
-        params: ElementLoadParams::Uniform { wx: 0.0, wy: w },
-        series: Box::new(ConstantSeries),
-    });
+        ElementLoadParams::Uniform { wx: 0.0, wy: w },
+        ConstantSeries
+    ));
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
-    let algorithm = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(1.0));
+    let test = NormUnbalance::new(1e-8);
+    let algorithm = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(1.0);
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     assert!(driver.analyze(&mut model, 1).unwrap());
 
@@ -781,11 +788,11 @@ fn test_element_load_midspan_point() {
         model.add_node(Node::new(NodeId(1), l / 2.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(2), l, 0.0, 0.0)).unwrap();
 
-    let elem0 = model.add_element_typed(
+    let elem0 = model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l/2.0, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
-    let elem1 = model.add_element_typed(
+    let elem1 = model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), l/2.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -819,17 +826,17 @@ fn test_element_load_midspan_point() {
     // at xi=1.0 on elem0 which means node 1 receives the full point load.
     // This is identical to a NodalLoad at node 1 — compare against that.
 
-    model.add_load_typed(ElementLoad {
-        elem_id: elem0,
-        params: ElementLoadParams::Point { px: 0.0, py: p, xi: 1.0 },
-        series: Box::new(ConstantSeries),
-    });
+    model.add_load(ElementLoad::new(
+        elem0,
+        ElementLoadParams::Point { px: 0.0, py: p, xi: 1.0 },
+        ConstantSeries
+    ));
 
     model.build_state();
 
-    let test       = Box::new(NormUnbalance::new(1e-8));
-    let algorithm  = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(1.0));
+    let test = NormUnbalance::new(1e-8);
+    let algorithm  = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(1.0);
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     assert!(driver.analyze(&mut model, 1).unwrap());
 
@@ -876,7 +883,7 @@ fn test_load_combo_scale() {
 }
 
 // =============================================================================
-// TEST 17 — add_element_typed returns stable IDs
+// TEST 17 — add_element returns stable IDs
 // =============================================================================
 #[test]
 fn test_add_element_returns_id() {
@@ -886,11 +893,11 @@ fn test_add_element_returns_id() {
     model.add_node(Node::new(NodeId(2), 2.0, 0.0, 0.0)).unwrap();
 
     let mat = ElasticUniaxial::new(200e9, None).unwrap();
-    let id0 = model.add_element_typed(
+    let id0 = model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, 1.0, 0.0,
             mat.clone(), 0.01, 1e-4).unwrap()
     );
-    let id1 = model.add_element_typed(
+    let id1 = model.add_element(
         ElasticBeam2d::new(NodeId(1), NodeId(2), 1.0, 0.0, 2.0, 0.0,
             mat, 0.01, 1e-4).unwrap()
     );
@@ -972,7 +979,7 @@ fn test_node_recorder_pushover() {
     let mut model = Model::new(ModelDim::frame_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -980,16 +987,16 @@ fn test_node_recorder_pushover() {
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load_typed(NodalLoad {
-        node_id: NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series: Box::new(LinearSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1), 
+        vec![0.0, -p, 0.0], 
+        LinearSeries
+    ));
     model.build_state();
 
-    let test = Box::new(NormUnbalance::new(1e-8));
-    let algorithm = Box::new(NewtonRaphson::new(test, 25));
-    let integrator = Box::new(LoadControl::new(0.1)); // 10 × Δλ = 0.1
+    let test = NormUnbalance::new(1e-8);
+    let algorithm = NewtonRaphson::new(test, 25);
+    let integrator = LoadControl::new(0.1); // 10 × Δλ = 0.1
 
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
     driver.add_recorder(Box::new(NodeRecorder::single(4, "tip_uy")));
@@ -1034,7 +1041,7 @@ fn test_compute_reactions_cantilever() {
     let mut model = Model::new(ModelDim::frame_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, None).unwrap(), a, iz).unwrap()
     );
@@ -1042,18 +1049,23 @@ fn test_compute_reactions_cantilever() {
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load_typed(NodalLoad {
-        node_id: NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series: Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0], 
+        ConstantSeries
+    ));
+
     model.build_state();
 
-    let mut driver = StaticNonlinear::new(
-        Box::new(NewtonRaphson::new(Box::new(NormUnbalance::new(1e-8)), 25)),
-        Box::new(LoadControl::new(1.0)),
-        &model,
-    ).unwrap();
+    let mut driver = 
+        StaticNonlinear::new(
+            NewtonRaphson::new(
+                NormUnbalance::new(1e-8),
+                25
+            ),
+            LoadControl::new(1.0),
+            &model,
+        ).unwrap();
     assert!(driver.analyze(&mut model, 1).unwrap());
 
     model.compute_reactions();
@@ -1086,7 +1098,7 @@ fn test_build_rayleigh_damping() {
     let mut model = Model::new(ModelDim::frame_2d());
     model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
     model.add_node(Node::new(NodeId(1), l, 0.0, 0.0)).unwrap();
-    model.add_element_typed(
+    model.add_element(
         ElasticBeam2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0,
             ElasticUniaxial::new(e, Some(7850.0)).unwrap(), a, 1e-4).unwrap()
     );

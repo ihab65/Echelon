@@ -94,10 +94,10 @@ impl ModifiedNewton {
     ///
     /// # Panics
     /// Panics if `max_iterations == 0`.
-    pub fn new(test: Box<dyn ConvergenceTest>, max_iterations: usize) -> Self {
+    pub fn new<T: ConvergenceTest + 'static>(test: T, max_iterations: usize) -> Self {
         assert!(max_iterations > 0, "max_iterations must be at least 1");
         Self {
-            test,
+            test: Box::new(test),
             max_iterations,
             divergence_threshold: 1e15,
         }

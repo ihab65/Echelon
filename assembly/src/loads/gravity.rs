@@ -43,8 +43,11 @@ pub struct GravityLoad {
 
 impl GravityLoad {
     /// Construct from an explicit gravity vector and time series.
-    pub fn new(gravity: Vec<f64>, series: Box<dyn TimeSeries>) -> Self {
-        Self { gravity, series }
+    pub fn new<S: TimeSeries + 'static>(gravity: Vec<f64>, series: S) -> Self {
+        Self { 
+            gravity, 
+            series: Box::new(series) 
+        }
     }
 
     /// Convenience: constant downward gravity for a 2D frame model.
@@ -52,13 +55,13 @@ impl GravityLoad {
     /// Equivalent to `GravityLoad::new(vec![0.0, -g, 0.0], Box::new(ConstantSeries))`.
     pub fn frame_2d(g: f64) -> Self {
         use crate::loads::series::ConstantSeries;
-        Self::new(vec![0.0, -g, 0.0], Box::new(ConstantSeries))
+        Self::new(vec![0.0, -g, 0.0], ConstantSeries)
     }
 
     /// Convenience: constant downward gravity for a 2D truss model.
     pub fn truss_2d(g: f64) -> Self {
         use crate::loads::series::ConstantSeries;
-        Self::new(vec![0.0, -g], Box::new(ConstantSeries))
+        Self::new(vec![0.0, -g], ConstantSeries)
     }
 }
 
@@ -125,7 +128,7 @@ mod tests {
         let mut m = Model::new(ModelDim::frame_2d());
         m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
-        m.add_element_typed(
+        m.add_element(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,
                 ElasticUniaxial::new(200e9, Some(7850.0)).unwrap(),
@@ -170,7 +173,7 @@ mod tests {
         let mut m = Model::new(ModelDim::frame_2d());
         m.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         m.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
-        m.add_element_typed(
+        m.add_element(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,
                 ElasticUniaxial::new(200e9, None).unwrap(),

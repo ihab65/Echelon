@@ -230,7 +230,7 @@ mod tests {
         let mut model = Model::new(ModelDim::frame_2d());
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
-        model.add_element_typed(
+        model.add_element(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,
                 ElasticUniaxial::new(200e9, Some(7850.0)).unwrap(),
@@ -260,7 +260,7 @@ mod tests {
         let mut model = Model::new(ModelDim::frame_2d());
         model.add_node(Node::new(NodeId(0), 0.0, 0.0, 0.0)).unwrap();
         model.add_node(Node::new(NodeId(1), 2.0, 0.0, 0.0)).unwrap();
-        model.add_element_typed(
+        model.add_element(
             ElasticBeam2d::new(
                 NodeId(0), NodeId(1), 0.0, 0.0, 2.0, 0.0,
                 ElasticUniaxial::new(200e9, Some(7850.0)).unwrap(),

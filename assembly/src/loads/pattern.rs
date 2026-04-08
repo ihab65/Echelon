@@ -105,6 +105,21 @@ pub struct NodalLoad {
     pub series: Box<dyn TimeSeries>,
 }
 
+impl NodalLoad {
+    pub fn new<S: TimeSeries + 'static>(
+        node_id: NodeId,
+        reference_loads: Vec<f64>,
+        series: S,
+    ) -> Self 
+    {
+        Self { 
+            node_id, 
+            reference_loads, 
+            series: Box::new(series) 
+        }
+    }
+}
+
 impl LoadPattern for NodalLoad {
     fn apply_to_global_vector(
         &self,
@@ -160,7 +175,7 @@ unsafe impl Sync for NodalLoad {}
 /// A distributed or point load applied along the span of a specific element.
 ///
 /// The element is identified by the index returned from
-/// [`Model::add_element_typed`]. The load is converted to equivalent global
+/// [`Model::add_element`]. The load is converted to equivalent global
 /// nodal forces via [`Element::equivalent_nodal_forces`] and scattered into
 /// `f_ext` at the element's global DOFs.
 ///
@@ -178,12 +193,27 @@ unsafe impl Sync for NodalLoad {}
 /// });
 /// ```
 pub struct ElementLoad {
-    /// Index of the target element (returned by [`Model::add_element_typed`]).
+    /// Index of the target element (returned by [`Model::add_element`]).
     pub elem_id: ElemId,
     /// Load type and magnitude.
     pub params: ElementLoadParams,
     /// Temporal scaling rule.
     pub series: Box<dyn TimeSeries>,
+}
+
+impl ElementLoad {
+    pub fn new<S: TimeSeries + 'static>(
+        elem_id: ElemId,
+        params: ElementLoadParams,
+        series: S
+    ) -> Self
+    {
+        Self {
+            elem_id,
+            params,
+            series: Box::new(series)
+        }
+    }
 }
 
 impl LoadPattern for ElementLoad {

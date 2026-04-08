@@ -182,7 +182,7 @@ macro_rules! _echelon_add_element {
         let y0 = $model.nodes[$n0].y;
         let x1 = $model.nodes[$n1].x;
         let y1 = $model.nodes[$n1].y;
-        $model.add_element_typed(
+        $model.add_element(
             ElasticBeam2d::new(
                 NodeId($n0), NodeId($n1),
                 x0, y0, x1, y1,
@@ -200,7 +200,7 @@ macro_rules! _echelon_add_element {
         let y0 = $model.nodes[$n0].y;
         let x1 = $model.nodes[$n1].x;
         let y1 = $model.nodes[$n1].y;
-        $model.add_element_typed(
+        $model.add_element(
             Truss2d::new(
                 NodeId($n0), NodeId($n1),
                 x0, y0, x1, y1,

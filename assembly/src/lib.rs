@@ -52,7 +52,7 @@
 //! let mut model = Model::new(ModelDim::frame_2d());
 //! model.add_node(Node::new(NodeId(0), 0.0, 0.0)).unwrap();
 //! model.add_node(Node::new(NodeId(1), 3.0, 0.0)).unwrap();
-//! model.add_element_typed(beam);
+//! model.add_element(beam);
 //! model.add_constraint(SpConstraint::new(NodeId(0), 0, 0.0, 3)).unwrap();
 //! model.add_constraint(SpConstraint::new(NodeId(0), 1, 0.0, 3)).unwrap();
 //! model.add_constraint(SpConstraint::new(NodeId(0), 2, 0.0, 3)).unwrap();
