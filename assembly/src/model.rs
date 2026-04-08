@@ -256,7 +256,7 @@ impl Model {
         // hold a mutable reference to `p_base`. Use a temporary scratch
         // buffer and accumulate, to avoid the split-borrow problem.
         let mut scratch = vec![0.0_f64; n];
-        load.apply_to_global_vector(pseudo_time, self, &mut scratch);
+        load.apply_to_global_vector(pseudo_time, self, &mut scratch, 1.0);
         let p_base = self.p_base.as_mut().unwrap();
         for (b, s) in p_base.iter_mut().zip(scratch.iter()) {
             *b += s;

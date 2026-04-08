@@ -72,7 +72,7 @@ pub fn assemble_load_vector(
 
     // 3. Apply each active load pattern additively
     for load in &model.loads {
-        load.apply_to_global_vector(pseudo_time, model, f_ext);
+        load.apply_to_global_vector(pseudo_time, model, f_ext, 1.0);
     }
 
     Ok(())

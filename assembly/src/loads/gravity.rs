@@ -71,8 +71,9 @@ impl LoadPattern for GravityLoad {
         pseudo_time: f64,
         model:       &Model,
         f_ext:       &mut [f64],
+        alpha:       f64
     ) {
-        let scale = self.series.factor_at(pseudo_time);
+        let scale = self.series.factor_at(pseudo_time) * alpha;
         let ndf   = model.dim.ndf();
 
         for elem in model.elements.iter() {
@@ -144,7 +145,7 @@ mod tests {
         let m = beam_model_with_density();
         let g = GravityLoad::frame_2d(9.81);
         let mut f = vec![0.0_f64; 6];
-        g.apply_to_global_vector(1.0, &m, &mut f);
+        g.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         // UY DOFs (indices 1 and 4) must be negative (downward)
         assert!(f[1] < 0.0, "f[1]={}", f[1]);
         assert!(f[4] < 0.0, "f[4]={}", f[4]);
@@ -160,7 +161,7 @@ mod tests {
         let m = beam_model_with_density();
         let g = GravityLoad::frame_2d(9.81);
         let mut f = vec![0.0_f64; 6];
-        g.apply_to_global_vector(1.0, &m, &mut f);
+        g.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         let total: f64 = f.iter().sum();
         // rho*A*L*g = 7850 * 0.01 * 2 * 9.81
         let expected = -7850.0 * 0.01 * 2.0 * 9.81;
@@ -183,7 +184,7 @@ mod tests {
         m.build_state();
         let g = GravityLoad::frame_2d(9.81);
         let mut f = vec![0.0_f64; 6];
-        g.apply_to_global_vector(1.0, &m, &mut f);
+        g.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         assert!(f.iter().all(|&v| v == 0.0), "no density → zero gravity");
     }
 
@@ -194,8 +195,8 @@ mod tests {
         let g_clone = g.clone_box();
         let mut f1 = vec![0.0_f64; 6];
         let mut f2 = vec![0.0_f64; 6];
-        g.apply_to_global_vector(1.0, &m, &mut f1);
-        g_clone.apply_to_global_vector(1.0, &m, &mut f2);
+        g.apply_to_global_vector(1.0, &m, &mut f1, 1.0);
+        g_clone.apply_to_global_vector(1.0, &m, &mut f2, 1.0);
         assert_eq!(f1, f2);
     }
 }

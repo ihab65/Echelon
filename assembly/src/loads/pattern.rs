@@ -49,6 +49,7 @@ pub trait LoadPattern: Send + Sync {
         pseudo_time: f64,
         model:       &Model,
         f_ext:       &mut [f64],
+        alpha:       f64
     );
 
         /// Clone this load pattern into a heap-allocated trait object.
@@ -126,8 +127,9 @@ impl LoadPattern for NodalLoad {
         pseudo_time: f64,
         model:       &Model,
         f_ext:       &mut [f64],
+        alpha:       f64
     ) {
-        let scale   = self.series.factor_at(pseudo_time);
+        let scale   = self.series.factor_at(pseudo_time) * alpha;
         let ndf     = model.dim.ndf();
         let base    = self.node_id.first_dof(ndf);
 
@@ -222,6 +224,7 @@ impl LoadPattern for ElementLoad {
         pseudo_time: f64,
         model:       &Model,
         f_ext:       &mut [f64],
+        alpha:       f64
     ) {
         let Some(elem) = model.elements.get(self.elem_id.0) else {
             // Element index out of range — silently skip rather than panic.
@@ -230,7 +233,7 @@ impl LoadPattern for ElementLoad {
             return;
         };
 
-        let scale   = self.series.factor_at(pseudo_time);
+        let scale   = self.series.factor_at(pseudo_time) * alpha;
         let f_enq   = elem.equivalent_nodal_forces(&self.params);
         let dof_map = elem.dof_map();
 
@@ -305,7 +308,7 @@ mod tests {
             series:          Box::new(ConstantSeries),
         };
         let mut f = vec![0.0_f64; 6];
-        load.apply_to_global_vector(1.0, &m, &mut f);
+        load.apply_to_global_vector(1.0, &m, &mut f, 1.0);
 
         // Node 1: global DOFs 3, 4, 5
         assert_eq!(f[0], 0.0);
@@ -330,8 +333,8 @@ mod tests {
             series:          Box::new(ConstantSeries),
         };
         let mut f = vec![0.0_f64; 6];
-        load1.apply_to_global_vector(1.0, &m, &mut f);
-        load2.apply_to_global_vector(1.0, &m, &mut f);
+        load1.apply_to_global_vector(1.0, &m, &mut f, 1.0);
+        load2.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         assert!((f[0] - 3.0).abs() < 1e-14); // 1 + 2 = 3
     }
 
@@ -346,7 +349,7 @@ mod tests {
             series:          Box::new(LinearSeries),
         };
         let mut f = vec![0.0_f64; 6];
-        load.apply_to_global_vector(0.3, &m, &mut f);
+        load.apply_to_global_vector(0.3, &m, &mut f, 1.0);
         assert!((f[0] - 30.0).abs() < 1e-10);
     }
 
@@ -359,7 +362,7 @@ mod tests {
             series:          Box::new(LinearSeries),
         };
         let mut f = vec![0.0_f64; 6];
-        load.apply_to_global_vector(0.0, &m, &mut f);
+        load.apply_to_global_vector(0.0, &m, &mut f, 1.0);
         assert!(f.iter().all(|&v| v == 0.0));
     }
 
@@ -374,7 +377,7 @@ mod tests {
             series:          Box::new(ConstantSeries),
         };
         let mut f = vec![0.0_f64; 4]; // 2 nodes × 2 DOF
-        load.apply_to_global_vector(1.0, &m, &mut f);
+        load.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         // Node 1: DOFs 2 and 3
         assert_eq!(f[0], 0.0);
         assert_eq!(f[1], 0.0);

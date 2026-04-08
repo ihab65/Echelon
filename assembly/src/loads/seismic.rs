@@ -126,8 +126,9 @@ impl LoadPattern for UniformExcitation {
         pseudo_time: f64,
         model:       &Model,
         f_ext:       &mut [f64],
+        alpha:       f64
     ) {
-        let accel = self.ground_motion.accel_at(pseudo_time) * self.accel_scale;
+        let accel = self.ground_motion.accel_at(pseudo_time) * self.accel_scale * alpha;
         if accel == 0.0 {
             return; // short-circuit for out-of-record times
         }
@@ -244,9 +245,9 @@ mod tests {
         let exc = UniformExcitation::new(gm, 0, 9.81);
 
         let mut f = vec![0.0_f64; 6];
-        exc.apply_to_global_vector(0.0, &model, &mut f); // t=0 → 0
+        exc.apply_to_global_vector(0.0, &model, &mut f, 1.0); // t=0 → 0
         assert!(f.iter().all(|&v| v == 0.0));
-        exc.apply_to_global_vector(2.0, &model, &mut f); // t=duration → 0
+        exc.apply_to_global_vector(2.0, &model, &mut f, 1.0); // t=duration → 0
         assert!(f.iter().all(|&v| v == 0.0));
     }
 
@@ -274,7 +275,7 @@ mod tests {
         let exc = UniformExcitation::new(gm, 0, 9.81); // UX direction
 
         let mut f = vec![0.0_f64; 6];
-        exc.apply_to_global_vector(0.5, &model, &mut f); // at peak
+        exc.apply_to_global_vector(0.5, &model, &mut f, 1.0); // at peak
 
         // UX DOFs (0 and 3) must be negative (inertial = -M*a, a > 0)
         assert!(f[0] < 0.0, "f[0]={}", f[0]); // node 0 UX
