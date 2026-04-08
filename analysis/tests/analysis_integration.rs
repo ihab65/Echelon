@@ -862,20 +862,26 @@ fn test_load_combo_scale() {
     model.add_node(Node::new(NodeId(1), 3.0, 0.0, 0.0)).unwrap();
     model.build_state();
 
-    let mut combo = LoadCombo::new(1.35);
-    combo.add(Box::new(NodalLoad {
-        node_id: NodeId(1),
-        reference_loads: vec![10e3, 0.0, 0.0],
-        series: Box::new(ConstantSeries),
-    }));
-    combo.add(Box::new(NodalLoad {
-        node_id: NodeId(1),
-        reference_loads: vec![10e3, 0.0, 0.0],
-        series: Box::new(ConstantSeries),
-    }));
+    let mut combo = LoadCombo::new();
+    combo.add(
+        1.35,
+        NodalLoad::new(
+            NodeId(1),
+            vec![10e3, 0.0, 0.0],
+            ConstantSeries
+        )
+    );
+    combo.add(
+        1.35,
+        NodalLoad::new(
+            NodeId(1),
+            vec![10e3, 0.0, 0.0],
+            ConstantSeries
+        )
+    );
 
     let mut f = vec![0.0_f64; 6];
-    combo.apply_to_global_vector(1.0, &model, &mut f);
+    combo.apply_to_global_vector(1.0, &model, &mut f, 1.0);
 
     let expected = 2.0 * 10e3 * 1.35;
     assert!((f[3] - expected).abs() < 1e-6,

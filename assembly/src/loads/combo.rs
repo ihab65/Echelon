@@ -10,16 +10,16 @@
 //! ```rust,ignore
 //! use assembly::loads::combo::LoadCombo;
 //!
-//! let mut dead = LoadCombo::new(1.0);
-//! dead.add(Box::new(gravity_load));
+//! let mut dead = LoadCombo::new();
+//! dead.add(gravity_load));
 //!
-//! let mut live = LoadCombo::new(1.0);
-//! live.add(Box::new(floor_load));
+//! let mut live = LoadCombo::new();
+//! live.add(floor_load));
 //!
 //! // ULS: 1.35·DL + 1.5·LL
-//! let mut uls = LoadCombo::new(1.0);
-//! uls.add(Box::new(LoadCombo::scaled(1.35, dead)));
-//! uls.add(Box::new(LoadCombo::scaled(1.50, live)));
+//! let mut uls = LoadCombo::new();
+//! uls.add(1.35, dead);
+//! uls.add(1.50, live);
 //!
 //! model.add_load_typed(uls);
 //! ```
@@ -33,28 +33,19 @@ use crate::model::Model;
 /// The contribution to `f_ext` is:
 /// `Σ child_i.apply(...) * scale_factor`
 pub struct LoadCombo {
-    /// Global scale factor applied to all child loads.
-    pub scale_factor: f64,
     /// Child load patterns (may themselves be [`LoadCombo`]s).
-    pub children: Vec<Box<dyn LoadPattern>>,
+    pub children: Vec<(f64, Box<dyn LoadPattern>)>,
 }
 
 impl LoadCombo {
     /// Create an empty combo with the given scale factor.
-    pub fn new(scale_factor: f64) -> Self {
-        Self { scale_factor, children: Vec::new() }
-    }
-
-    /// Convenience: wrap a single load with a scale factor.
-    pub fn scaled(scale_factor: f64, load: impl LoadPattern + 'static) -> Self {
-        let mut combo = Self::new(scale_factor);
-        combo.add(Box::new(load));
-        combo
+    pub fn new() -> Self {
+        Self { children: Vec::new() }
     }
 
     /// Add a child load pattern to this combination.
-    pub fn add(&mut self, load: Box<dyn LoadPattern>) {
-        self.children.push(load);
+    pub fn add<T: LoadPattern + 'static>(&mut self, factor: f64, load: T) {
+        self.children.push((factor, Box::new(load)));
     }
 
     /// Number of direct children.
@@ -74,43 +65,54 @@ impl LoadPattern for LoadCombo {
         pseudo_time: f64,
         model:       &Model,
         f_ext:       &mut [f64],
+        alpha:       f64
     ) {
         if self.children.is_empty() {
             return;
         }
-        // Evaluate all children into a scratch buffer, then scale into f_ext.
         // This avoids aliasing: we never write to f_ext while children read it.
-        let mut scratch = vec![0.0_f64; f_ext.len()];
-        for child in &self.children {
-            child.apply_to_global_vector(pseudo_time, model, &mut scratch);
-        }
-        let factor = self.scale_factor;
-        for (fi, si) in f_ext.iter_mut().zip(scratch.iter()) {
-            *fi += si * factor;
+        for (factor, child) in &self.children {
+            child.apply_to_global_vector(pseudo_time, model, f_ext, alpha * factor);
         }
     }
 
     fn clone_box(&self) -> Box<dyn LoadPattern> {
-        let mut copy = LoadCombo::new(self.scale_factor);
-        for child in &self.children {
-            copy.add(child.clone_box());
+        let mut copy = LoadCombo::new();
+        // Unpack the tuple here
+        for (factor, child) in &self.children {
+            // We push directly to the vector rather than using copy.add() 
+            // because .add() expects a generic T, not an already-boxed trait object.
+            copy.children.push((*factor, child.clone_box()));
         }
         Box::new(copy)
     }
 
     fn format_tree(&self, prefix: &str, is_last: bool) -> String {
         let branch = if is_last { "└── " } else { "├── " };
-        let mut out = format!(
-            "{prefix}{branch}LoadCombo (scale={:.3})\n",
-            self.scale_factor
-        );
+        
+        // LoadCombo no longer has a global scale, just print its name
+        let mut out = format!("{prefix}{branch}LoadCombo\n");
+        
         let child_prefix = format!(
             "{prefix}{}",
             if is_last { "    " } else { "│   " }
         );
+        
         let n = self.children.len();
-        for (i, child) in self.children.iter().enumerate() {
-            out.push_str(&child.format_tree(&child_prefix, i == n - 1));
+        for (i, (factor, child)) in self.children.iter().enumerate() {
+            let is_last_child = i == n - 1;
+            let child_str = child.format_tree(&child_prefix, is_last_child);
+            
+            // Ninja move: Inject the load factor directly into the child's branch output
+            // so the diagnostic tree still looks beautiful.
+            let child_branch = if is_last_child { "└── " } else { "├── " };
+            let injected_str = child_str.replacen(
+                child_branch, 
+                &format!("{}[×{:.2}] ", child_branch, factor), 
+                1
+            );
+            
+            out.push_str(&injected_str);
         }
         out
     }
@@ -142,24 +144,27 @@ mod tests {
 
     #[test]
     fn empty_combo_contributes_zero() {
-        let m   = two_node_model();
-        let c   = LoadCombo::new(1.0);
+        let m = two_node_model();
+        let c = LoadCombo::new();
         let mut f = vec![1.0_f64; 6];
-        c.apply_to_global_vector(1.0, &m, &mut f);
+        c.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         assert!(f.iter().all(|&v| v == 1.0), "empty combo must not modify f_ext");
     }
 
     #[test]
     fn scale_factor_applied_correctly() {
         let m = two_node_model();
-        let mut c = LoadCombo::new(2.0); // double everything
-        c.add(Box::new(NodalLoad {
-            node_id:         NodeId(1),
-            reference_loads: vec![10.0, 0.0, 0.0],
-            series:          Box::new(ConstantSeries),
-        }));
+        let mut c = LoadCombo::new(); // double everything
+        c.add(
+            2.0,
+            NodalLoad {
+                node_id:         NodeId(1),
+                reference_loads: vec![10.0, 0.0, 0.0],
+                series:          Box::new(ConstantSeries),
+            }
+        );
         let mut f = vec![0.0_f64; 6];
-        c.apply_to_global_vector(1.0, &m, &mut f);
+        c.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         // Node 1 UX = DOF 3; scaled by 2 → 20
         assert!((f[3] - 20.0).abs() < 1e-12, "f[3]={}", f[3]);
     }
@@ -168,48 +173,57 @@ mod tests {
     fn nested_combo_sums_correctly() {
         let m = two_node_model();
         // Inner combo: scale=1.35, load=10 → contributes 13.5
-        let mut inner = LoadCombo::new(1.35);
-        inner.add(Box::new(NodalLoad {
-            node_id: NodeId(1),
-            reference_loads: vec![10.0, 0.0, 0.0],
-            series: Box::new(ConstantSeries),
-        }));
+        let mut inner = LoadCombo::new();
+        inner.add(
+            1.35,
+            NodalLoad {
+                node_id: NodeId(1),
+                reference_loads: vec![10.0, 0.0, 0.0],
+                series: Box::new(ConstantSeries),
+            }
+        );
         // Outer combo: scale=1.0, wraps inner
-        let mut outer = LoadCombo::new(1.0);
-        outer.add(Box::new(inner));
+        let mut outer = LoadCombo::new();
+        outer.add(1.0, inner);
         let mut f = vec![0.0_f64; 6];
-        outer.apply_to_global_vector(1.0, &m, &mut f);
+        outer.apply_to_global_vector(1.0, &m, &mut f, 1.0);
         assert!((f[3] - 13.5).abs() < 1e-10, "f[3]={}", f[3]);
     }
 
     #[test]
     fn clone_box_produces_independent_copy() {
         let m = two_node_model();
-        let mut c = LoadCombo::new(3.0);
-        c.add(Box::new(NodalLoad {
-            node_id: NodeId(0),
-            reference_loads: vec![5.0, 0.0, 0.0],
-            series: Box::new(ConstantSeries),
-        }));
+        let mut c = LoadCombo::new();
+        c.add(
+            3.0,
+            NodalLoad {
+                node_id: NodeId(0),
+                reference_loads: vec![5.0, 0.0, 0.0],
+                series: Box::new(ConstantSeries),
+            }
+        );
         let cloned = c.clone_box();
 
         let mut f1 = vec![0.0_f64; 6];
         let mut f2 = vec![0.0_f64; 6];
-        c.apply_to_global_vector(1.0, &m, &mut f1);
-        cloned.apply_to_global_vector(1.0, &m, &mut f2);
+        c.apply_to_global_vector(1.0, &m, &mut f1, 1.0);
+        cloned.apply_to_global_vector(1.0, &m, &mut f2, 1.0);
         assert_eq!(f1, f2, "clone must produce identical result");
     }
 
     #[test]
     fn format_tree_contains_scale() {
-        let mut c = LoadCombo::new(1.5);
-        c.add(Box::new(NodalLoad {
-            node_id: NodeId(0),
-            reference_loads: vec![0.0, -50e3, 0.0],
-            series: Box::new(ConstantSeries),
-        }));
+        let mut c = LoadCombo::new();
+        c.add(
+            1.5, 
+            NodalLoad {
+                node_id: NodeId(0),
+                reference_loads: vec![0.0, -50e3, 0.0],
+                series: Box::new(ConstantSeries),
+            }
+        );
         let tree = c.format_tree("", true);
-        assert!(tree.contains("1.500"), "scale missing from tree: {tree}");
+        assert!(tree.contains("1.50"), "scale missing from tree: {tree}");
         assert!(tree.contains("NodalLoad"), "child missing from tree: {tree}");
     }
 }
