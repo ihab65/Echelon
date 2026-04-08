@@ -129,10 +129,10 @@ impl NewtonRaphson {
     ///
     /// # Panics
     /// Panics if `max_iterations == 0`.
-    pub fn new(test: Box<dyn ConvergenceTest>, max_iterations: usize) -> Self {
+    pub fn new<T: ConvergenceTest + 'static>(test: T, max_iterations: usize) -> Self {
         assert!(max_iterations > 0, "max_iterations must be at least 1");
         Self {
-            test,
+            test : Box::new(test),
             max_iterations,
             divergence_threshold: 1e15,
         }
@@ -285,19 +285,19 @@ mod tests {
     #[test]
     #[should_panic]
     fn zero_max_iterations_panics() {
-        let test = Box::new(NormUnbalance::new(1e-6));
+        let test = NormUnbalance::new(1e-6);
         let _ = NewtonRaphson::new(test, 0);
     }
 
     #[test]
     fn name_is_correct() {
-        let nr = NewtonRaphson::new(Box::new(NormUnbalance::new(1e-6)), 10);
+        let nr = NewtonRaphson::new(NormUnbalance::new(1e-6), 10);
         assert_eq!(nr.name(), "NewtonRaphson");
     }
 
     #[test]
     fn default_divergence_threshold_is_large() {
-        let nr = NewtonRaphson::new(Box::new(NormUnbalance::new(1e-6)), 10);
+        let nr = NewtonRaphson::new(NormUnbalance::new(1e-6), 10);
         assert!(nr.divergence_threshold > 1e10);
     }
 

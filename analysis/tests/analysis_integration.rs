@@ -171,7 +171,7 @@ fn test_nonlinear_static_cantilever_beam_newton() {
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(1.0)); // single full-load step
 
@@ -240,7 +240,7 @@ fn test_nonlinear_static_fixed_fixed_beam() {
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(1.0));
 
@@ -301,7 +301,7 @@ fn test_nonlinear_static_simply_supported_beam() {
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(1.0));
 
@@ -351,7 +351,7 @@ fn test_multi_step_load_control_cantilever() {
 
     model.build_state();
 
-    let test       = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm  = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(0.1)); // 10 steps × Δλ = 0.1
 
@@ -406,7 +406,7 @@ fn test_modified_newton_matches_full_newton() {
     // Full Newton
     let mut model_nr = make_model();
     {
-        let test = Box::new(NormUnbalance::new(1e-8));
+        let test = NormUnbalance::new(1e-8);
         let algo = Box::new(NewtonRaphson::new(test, 25));
         let integ = Box::new(LoadControl::new(1.0));
         let mut driver = StaticNonlinear::new(algo, integ, &model_nr).unwrap();
@@ -465,7 +465,7 @@ fn test_energy_increment_convergence() {
     model.build_state();
 
     // Use EnergyIncrement as the convergence criterion
-    let test       = Box::new(EnergyIncrement::new(1e-12));
+    let test = EnergyIncrement::new(1e-12);
     let algorithm  = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(1.0));
 
@@ -506,7 +506,7 @@ fn test_singular_model_does_not_panic() {
     });
     model.build_state();
 
-    let test       = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm  = Box::new(NewtonRaphson::new(test, 5));
     let integrator = Box::new(LoadControl::new(1.0));
 
@@ -556,7 +556,7 @@ fn test_linear_static_rejects_empty_model() {
 fn test_static_nonlinear_rejects_model_with_no_nodes() {
     let model = Model::new(ModelDim::frame_2d()); // empty: no nodes, no elements
 
-    let test = Box::new(NormUnbalance::new(1e-6));
+    let test = NormUnbalance::new(1e-6);
     let algorithm = Box::new(NewtonRaphson::new(test, 10));
     let integrator = Box::new(LoadControl::new(1.0));
 
@@ -743,7 +743,7 @@ fn test_element_load_uniform_cantilever() {
 
     model.build_state();
 
-    let test      = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(1.0));
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
@@ -828,7 +828,7 @@ fn test_element_load_midspan_point() {
 
     model.build_state();
 
-    let test       = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm  = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(1.0));
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
@@ -988,7 +988,7 @@ fn test_node_recorder_pushover() {
     });
     model.build_state();
 
-    let test = Box::new(NormUnbalance::new(1e-8));
+    let test = NormUnbalance::new(1e-8);
     let algorithm = Box::new(NewtonRaphson::new(test, 25));
     let integrator = Box::new(LoadControl::new(0.1)); // 10 × Δλ = 0.1
 
@@ -1051,7 +1051,12 @@ fn test_compute_reactions_cantilever() {
     model.build_state();
 
     let mut driver = StaticNonlinear::new(
-        Box::new(NewtonRaphson::new(Box::new(NormUnbalance::new(1e-8)), 25)),
+        Box::new(
+            NewtonRaphson::new(
+                NormUnbalance::new(1e-8), 
+                25
+            )
+        ),
         Box::new(LoadControl::new(1.0)),
         &model,
     ).unwrap();
