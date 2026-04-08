@@ -43,6 +43,8 @@
 //! - Two-step load control pushover (verify incremental assembly)
 //! - Modified Newton convergence on a linear problem (same result as full Newton)
 
+use std::vec;
+
 use fem_core::{ModelDim, NodeId};
 use materials::ElasticUniaxial;
 use elements::{Truss2d, ElasticBeam2d};
@@ -111,11 +113,13 @@ fn test_linear_static_single_truss() {
     model.add_constraint(SpConstraint::new(NodeId(1), 1, 0.0, ndf)).unwrap();
 
     // Axial load P at node 1
-    model.add_load(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(
+        NodalLoad::new(
+            NodeId(1), 
+            vec![p, 0.0], 
+            ConstantSeries
+        )
+    );
 
     model.build_state();
 
@@ -163,11 +167,11 @@ fn test_nonlinear_static_cantilever_beam_newton() {
     }
 
     // Downward point load at node 1
-    model.add_load(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
 
     model.build_state();
 
@@ -232,11 +236,11 @@ fn test_nonlinear_static_fixed_fixed_beam() {
     }
 
     // Downward load at midspan node 1
-    model.add_load(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
 
     model.build_state();
 
@@ -293,11 +297,11 @@ fn test_nonlinear_static_simply_supported_beam() {
     // Node 2: roller — fix UY only
     model.add_constraint(SpConstraint::new(NodeId(2), 1, 0.0, ndf)).unwrap();
 
-    model.add_load(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
 
     model.build_state();
 
@@ -343,11 +347,11 @@ fn test_multi_step_load_control_cantilever() {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
 
-    model.add_load(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1), 
+        vec![0.0, -p, 0.0], 
+        ConstantSeries
+    ));
 
     model.build_state();
 
@@ -457,11 +461,12 @@ fn test_energy_increment_convergence() {
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0],
+        ConstantSeries
+    ));
+
     model.build_state();
 
     // Use EnergyIncrement as the convergence criterion
@@ -499,11 +504,12 @@ fn test_singular_model_does_not_panic() {
     model.add_element(
         Truss2d::new(NodeId(0), NodeId(1), 0.0, 0.0, l, 0.0, steel(), a).unwrap()
     );
-    model.add_load(NodalLoad {
-        node_id:         NodeId(1),
-        reference_loads: vec![p, 0.0],
-        series:          Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![p, 0.0],
+        ConstantSeries
+    ));
+
     model.build_state();
 
     let test = NormUnbalance::new(1e-8);
@@ -735,11 +741,11 @@ fn test_element_load_uniform_cantilever() {
     }
 
     // Uniform downward distributed load via ElementLoad
-    model.add_load(ElementLoad {
+    model.add_load(ElementLoad::new(
         elem_id,
-        params: ElementLoadParams::Uniform { wx: 0.0, wy: w },
-        series: Box::new(ConstantSeries),
-    });
+        ElementLoadParams::Uniform { wx: 0.0, wy: w },
+        ConstantSeries
+    ));
 
     model.build_state();
 
@@ -820,11 +826,11 @@ fn test_element_load_midspan_point() {
     // at xi=1.0 on elem0 which means node 1 receives the full point load.
     // This is identical to a NodalLoad at node 1 — compare against that.
 
-    model.add_load(ElementLoad {
-        elem_id: elem0,
-        params: ElementLoadParams::Point { px: 0.0, py: p, xi: 1.0 },
-        series: Box::new(ConstantSeries),
-    });
+    model.add_load(ElementLoad::new(
+        elem0,
+        ElementLoadParams::Point { px: 0.0, py: p, xi: 1.0 },
+        ConstantSeries
+    ));
 
     model.build_state();
 
@@ -981,11 +987,11 @@ fn test_node_recorder_pushover() {
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load(NodalLoad {
-        node_id: NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series: Box::new(LinearSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1), 
+        vec![0.0, -p, 0.0], 
+        LinearSeries
+    ));
     model.build_state();
 
     let test = NormUnbalance::new(1e-8);
@@ -1043,11 +1049,12 @@ fn test_compute_reactions_cantilever() {
     for dof in 0..ndf {
         model.add_constraint(SpConstraint::new(NodeId(0), dof, 0.0, ndf)).unwrap();
     }
-    model.add_load(NodalLoad {
-        node_id: NodeId(1),
-        reference_loads: vec![0.0, -p, 0.0],
-        series: Box::new(ConstantSeries),
-    });
+    model.add_load(NodalLoad::new(
+        NodeId(1),
+        vec![0.0, -p, 0.0], 
+        ConstantSeries
+    ));
+
     model.build_state();
 
     let mut driver = 

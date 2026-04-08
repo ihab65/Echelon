@@ -105,6 +105,21 @@ pub struct NodalLoad {
     pub series: Box<dyn TimeSeries>,
 }
 
+impl NodalLoad {
+    pub fn new<S: TimeSeries + 'static>(
+        node_id: NodeId,
+        reference_loads: Vec<f64>,
+        series: S,
+    ) -> Self 
+    {
+        Self { 
+            node_id, 
+            reference_loads, 
+            series: Box::new(series) 
+        }
+    }
+}
+
 impl LoadPattern for NodalLoad {
     fn apply_to_global_vector(
         &self,
@@ -184,6 +199,21 @@ pub struct ElementLoad {
     pub params: ElementLoadParams,
     /// Temporal scaling rule.
     pub series: Box<dyn TimeSeries>,
+}
+
+impl ElementLoad {
+    pub fn new<S: TimeSeries + 'static>(
+        elem_id: ElemId,
+        params: ElementLoadParams,
+        series: S
+    ) -> Self
+    {
+        Self {
+            elem_id,
+            params,
+            series: Box::new(series)
+        }
+    }
 }
 
 impl LoadPattern for ElementLoad {
