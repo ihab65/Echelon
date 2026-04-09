@@ -42,6 +42,7 @@
 
 use assembly::Model;
 use sparse::{SparseMatrix, SymCsrMatrix};
+use sparse::MatvecWorkspace;
 
 use crate::error::{AnalysisError, Result};
 use crate::integrators::Integrator;
@@ -91,6 +92,11 @@ pub struct HHT {
     prev_acceleration: Vec<f64>,
     /// F_ext evaluated at the *previous* committed step (for HHT blending).
     f_ext_prev:        Vec<f64>,
+
+    // ---- Persistent Workspaces ----
+    f_new:       Vec<f64>,
+    pred_buffer: Vec<f64>,
+    matvec_ws:   MatvecWorkspace<f64>,
 }
 
 impl HHT {
@@ -136,6 +142,9 @@ impl HHT {
             prev_velocity:     vec![0.0; n],
             prev_acceleration: vec![0.0; n],
             f_ext_prev:        vec![0.0; n],
+            f_new:             vec![0.0; n],
+            pred_buffer:       vec![0.0; n],
+            matvec_ws:         MatvecWorkspace::new(n),
         }
     }
 }
@@ -154,7 +163,6 @@ impl Integrator for HHT {
         self.current_time += self.dt;
         let n = model.n_dof();
 
-        // Newmark coefficients
         let a0 = 1.0 / (self.beta * self.dt * self.dt);
         let a2 = 1.0 / (self.beta * self.dt);
         let a3 = 1.0 / (2.0 * self.beta) - 1.0;
@@ -162,36 +170,48 @@ impl Integrator for HHT {
         let a4 = self.gamma / self.beta - 1.0;
         let a5 = self.dt * (self.gamma / self.beta - 2.0) / 2.0;
 
-        // F_ext at t + Δt
-        let mut f_new = vec![0.0_f64; n];
-        assembly::assemble_load_vector(model, self.current_time, &mut f_new)?;
+        // 1. Evaluate external load straight into the persistent buffer
+        self.f_new.fill(0.0);
+        assembly::assemble_load_vector(model, self.current_time, &mut self.f_new)?;
 
-        // HHT blend: (1+α) F_new − α F_prev
+        // HHT blend
         let alpha = self.alpha;
         for i in 0..n {
-            system.f_ext[i] = (1.0 + alpha) * f_new[i] - alpha * self.f_ext_prev[i];
+            system.f_ext[i] = (1.0 + alpha) * self.f_new[i] - alpha * self.f_ext_prev[i];
         }
 
-        // Inertia predictor
-        let m_pred: Vec<f64> = (0..n)
-            .map(|i| a0 * model.u_global[i] + a2 * self.velocity[i] + a3 * self.acceleration[i])
-            .collect();
-        let m_force = self.mass.matvec(&m_pred)
+        // 2. Inertia predictor
+        for i in 0..n {
+            self.pred_buffer[i] = a0 * model.u_global[i] 
+                                + a2 * self.velocity[i] 
+                                + a3 * self.acceleration[i];
+        }
+        
+        self.mass.matvec_into(&self.pred_buffer, &mut self.matvec_ws)
             .map_err(|e| AnalysisError::from(assembly::error::AssemblyError::from(e)))?;
-        for i in 0..n { system.f_ext[i] += m_force[i]; }
-
-        // Damping predictor (if present)
-        if let Some(ref c) = self.damping {
-            let c_pred: Vec<f64> = (0..n)
-                .map(|i| a1 * model.u_global[i] + a4 * self.velocity[i] + a5 * self.acceleration[i])
-                .collect();
-            let c_force = c.matvec(&c_pred)
-                .map_err(|e| AnalysisError::from(assembly::error::AssemblyError::from(e)))?;
-            for i in 0..n { system.f_ext[i] += (1.0 + alpha) * c_force[i]; }
+            
+        for i in 0..n { 
+            system.f_ext[i] += self.matvec_ws.as_slice()[i]; 
         }
 
-        // Save f_new as f_ext_prev for the next step
-        self.f_ext_prev = f_new;
+        // 3. Damping predictor
+        if let Some(ref c) = self.damping {
+            for i in 0..n {
+                self.pred_buffer[i] = a1 * model.u_global[i] 
+                                    + a4 * self.velocity[i] 
+                                    + a5 * self.acceleration[i];
+            }
+            
+            c.matvec_into(&self.pred_buffer, &mut self.matvec_ws)
+                .map_err(|e| AnalysisError::from(assembly::error::AssemblyError::from(e)))?;
+                
+            for i in 0..n { 
+                system.f_ext[i] += (1.0 + alpha) * self.matvec_ws.as_slice()[i]; 
+            }
+        }
+
+        // Save f_new to f_ext_prev using copy_from_slice!
+        self.f_ext_prev.copy_from_slice(&self.f_new);
         Ok(())
     }
 
@@ -226,14 +246,14 @@ impl Integrator for HHT {
     }
 
     fn commit(&mut self) {
-        self.prev_velocity     = self.velocity.clone();
-        self.prev_acceleration = self.acceleration.clone();
+        self.prev_velocity.copy_from_slice(&self.velocity);
+        self.prev_acceleration.copy_from_slice(&self.acceleration);
     }
 
     fn revert(&mut self) {
         self.current_time  -= self.dt;
-        self.velocity       = self.prev_velocity.clone();
-        self.acceleration   = self.prev_acceleration.clone();
+        self.velocity.copy_from_slice(&self.prev_velocity);
+        self.acceleration.copy_from_slice(&self.prev_acceleration);
     }
 
     fn name(&self) -> &'static str {
