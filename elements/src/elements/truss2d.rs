@@ -138,12 +138,15 @@ impl Element for Truss2d {
     #[inline]
     fn n_dof(&self) -> usize { 4 }
 
-    fn ke_flat(&self, _u: &[f64]) -> Vec<f64> {
+    fn ke_flat(&self, _u: &[f64], out: &mut [f64]) {
         // Linear elastic: stiffness is displacement-independent.
-        stiffness_global(self.ea_over_l, self.transf.cos, self.transf.sin).to_vec()
+        debug_assert_eq!(out.len(), 16);
+        out.copy_from_slice(
+            &stiffness_global(self.ea_over_l, self.transf.cos, self.transf.sin)
+        );
     }
 
-    fn mass_flat(&self) -> Vec<f64> {
+    fn mass_flat(&self, out: &mut [f64]) {
         // If the user didn't define rho, the mass is zero.
         // The assembly/analysis (Eigen or Transiant) crate 
         // will intercept all-zero mass matrices if needed.
@@ -151,20 +154,26 @@ impl Element for Truss2d {
         let m_total = rho * self.a() * self.length();
         let m_half = m_total / 2.0;
 
-        let mut lumped_mass = vec![0.0; 16]; // 4x4 matrix for 2D truss
+        debug_assert_eq!(out.len(), 16);
+        out.fill(0.0); // 4x4 matrix for 2D truss
         
-        lumped_mass[0] = m_half;  // node 1 ux
-        lumped_mass[5] = m_half;  // node 1 uy
-        lumped_mass[10] = m_half; // node 2 ux
-        lumped_mass[15] = m_half; // node 2 uy
-
-        lumped_mass
+        out[0] = m_half;  // node 1 ux
+        out[5] = m_half;  // node 1 uy
+        out[10] = m_half; // node 2 ux
+        out[15] = m_half; // node 2 uy
     }
 
-    fn f_int(&self, u: &[f64]) -> Vec<f64> {
+    fn f_int(&self, u: &[f64], out: &mut [f64]) {
         debug_assert_eq!(u.len(), 4);
         let eps = axial_strain(u, self.transf.cos, self.transf.sin, self.transf.length);
-        f_int_global(self.ea_over_l, self.transf.cos, self.transf.sin, eps * self.transf.length).to_vec()
+        out.copy_from_slice(
+            &f_int_global(
+                self.ea_over_l, 
+                self.transf.cos, 
+                self.transf.sin, 
+                eps * self.transf.length
+            )
+        );
     }
 
     fn commit(&mut self, u: &[f64]) -> Result<()> {
@@ -184,7 +193,7 @@ impl Element for Truss2d {
 
     fn type_name(&self) -> &'static str { "Truss2d" }
 
-    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams) -> Vec<f64> {
+    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams, out: &mut [f64]) {
         use crate::traits::ElementLoadParams;
 
         let l = self.transf.length;
@@ -201,7 +210,7 @@ impl Element for Truss2d {
                 let wx_l = wx * c + wy * s;
                 let n    = wx_l * l / 2.0;
                 // Global force vector: [-c, -s] at node I, [c, s] at node J
-                vec![-n * c, -n * s, n * c, n * s]
+                out.copy_from_slice(&[-n * c, -n * s, n * c, n * s])
             }
 
             ElementLoadParams::Point { px, py, xi } => {
@@ -211,7 +220,7 @@ impl Element for Truss2d {
                 let px_l = px * c + py * s; // axial projection
                 let n_i  = px_l * (b / l);
                 let n_j  = px_l * (a / l);
-                vec![-n_i * c, -n_i * s, n_j * c, n_j * s]
+                out.copy_from_slice(&[-n_i * c, -n_i * s, n_j * c, n_j * s])
             }
 
             ElementLoadParams::Trapezoidal { wx_i, wx_j, wy_i, wy_j } => {
@@ -220,7 +229,7 @@ impl Element for Truss2d {
                 let dwx    = wx_l_j - wx_l_i;
                 let n_i    = wx_l_i * l / 2.0 + dwx * l / 6.0;
                 let n_j    = wx_l_i * l / 2.0 + dwx * l / 3.0;
-                vec![-n_i * c, -n_i * s, n_j * c, n_j * s]
+                out.copy_from_slice(&[-n_i * c, -n_i * s, n_j * c, n_j * s])
             }
         }
     }
@@ -245,15 +254,15 @@ impl DifferentiableElement for Truss2d {
 
     /// Override the default finite-difference stiffness with the closed-form
     /// expression — exact and fast.
-    fn ke_flat_from_energy(&self, u: &[f64]) -> Vec<f64> {
+    fn ke_flat_from_energy(&self, u: &[f64], out: &mut [f64]) {
         // For a linear element ke_flat_from_energy == ke_flat.
-        self.ke_flat(u)
+        self.ke_flat(u, out)
     }
 
     /// Override the default finite-difference residual with the closed-form
     /// expression.
-    fn f_int_from_energy(&self, u: &[f64]) -> Vec<f64> {
-        self.f_int(u)
+    fn f_int_from_energy(&self, u: &[f64], out: &mut [f64]) {
+        self.f_int(u, out)
     }
 }
 
@@ -274,7 +283,7 @@ impl Assembleable for Truss2d {
         &self.dof_map
     }
 
-    fn partial_residual_wrt_param(&self, u_local: &[f64], param_idx: usize) -> Result<Vec<f64>> {
+    fn partial_residual_wrt_param(&self, u_local: &[f64], param_idx: usize, out: &mut [f64]) -> Result<()> {
         debug_assert_eq!(u_local.len(), 4);
         let c   = self.transf.cos;
         let s   = self.transf.sin;
@@ -303,7 +312,9 @@ impl Assembleable for Truss2d {
             }),
         };
 
-        Ok(vec![-scale * c, -scale * s, scale * c, scale * s])
+        out.copy_from_slice(&[-scale * c, -scale * s, scale * c, scale * s]);
+
+        Ok(())
     }
 
     fn n_params(&self) -> usize { 2 }
@@ -374,7 +385,8 @@ mod tests {
     #[test]
     fn ke_flat_horizontal_correct() {
         let t  = horizontal();
-        let ke = t.ke_flat(&[0.0; 4]);
+        let mut ke = [0.0; 16];
+        t.ke_flat(&[0.0; 4], &mut ke);
         let k  = t.ea_over_l();
         // [0,0] = k, [0,2] = -k, [2,0] = -k, [2,2] = k
         assert!((ke[0]  -  k).abs() < 1e-3, "ke[0,0]");
@@ -385,7 +397,8 @@ mod tests {
 
     #[test]
     fn ke_flat_symmetric() {
-        let ke = diagonal().ke_flat(&[0.0; 4]);
+        let mut ke = [0.0; 16];
+        diagonal().ke_flat(&[0.0; 4], &mut ke);
         for i in 0..4 {
             for j in 0..4 {
                 assert!(
@@ -400,7 +413,8 @@ mod tests {
 
     #[test]
     fn f_int_zero_displacement_is_zero() {
-        let f = horizontal().f_int(&[0.0; 4]);
+        let mut f = [0.0; 4];
+        horizontal().f_int(&[0.0; 4], &mut f);
         assert!(f.iter().all(|&v| v == 0.0));
     }
 
@@ -409,7 +423,9 @@ mod tests {
         let t = horizontal();
         // Elongate node 2 by 1mm in x
         let u = [0.0, 0.0, 1e-3, 0.0];
-        let f = t.f_int(&u);
+        let mut f = [0.0; 4];
+        t.f_int(&u, &mut f);
+        
         let force = t.ea_over_l() * 1e-3;
         assert!((f[0] - -force).abs() < 1.0); // node 1 pulled left
         assert!((f[2] -  force).abs() < 1.0); // node 2 pulled right
@@ -434,8 +450,13 @@ mod tests {
     fn energy_hessian_matches_ke_flat() {
         // ∂²W/∂uᵢ∂uⱼ must equal ke[i,j] for a linear element
         let t  = horizontal();
-        let ke = t.ke_flat(&[0.0; 4]);
-        let ke_from_energy = t.ke_flat_from_energy(&[0.0; 4]);
+        
+        let mut ke = [0.0; 16];
+        t.ke_flat(&[0.0; 4], &mut ke);
+        
+        let mut ke_from_energy = [0.0; 16];
+        t.ke_flat_from_energy(&[0.0; 4], &mut ke_from_energy);
+        
         for (i, (a, b)) in ke.iter().zip(ke_from_energy.iter()).enumerate() {
             assert!(
                 (a - b).abs() < 1e3,  // relaxed tol: EA/L ≈ 1e9, FD accurate to ~1e6
@@ -448,8 +469,13 @@ mod tests {
     fn f_int_from_energy_matches_f_int() {
         let t = horizontal();
         let u = [0.0, 0.0, 5e-4, 1e-4];
-        let f1 = t.f_int(&u);
-        let f2 = t.f_int_from_energy(&u);
+        
+        let mut f1 = [0.0; 4];
+        t.f_int(&u, &mut f1);
+        
+        let mut f2 = [0.0; 4];
+        t.f_int_from_energy(&u, &mut f2);
+        
         for (i, (a, b)) in f1.iter().zip(f2.iter()).enumerate() {
             assert!(
                 (a - b).abs() < 1e4,
@@ -463,9 +489,15 @@ mod tests {
     #[test]
     fn commit_does_not_change_stiffness() {
         let mut t = horizontal();
-        let ke_before = t.ke_flat(&[0.0; 4]);
+        
+        let mut ke_before = [0.0; 16];
+        t.ke_flat(&[0.0; 4], &mut ke_before);
+        
         t.commit(&[0.0, 0.0, 1e-3, 0.0]).unwrap();
-        let ke_after = t.ke_flat(&[0.0; 4]);
+        
+        let mut ke_after = [0.0; 16];
+        t.ke_flat(&[0.0; 4], &mut ke_after);
+        
         assert_eq!(ke_before, ke_after);
     }
 
@@ -486,7 +518,8 @@ mod tests {
     fn partial_residual_e_direction_correct() {
         let t = horizontal();
         let u = [0.0, 0.0, 1e-3, 0.0]; // ε = 1e-3/2 = 5e-4
-        let dr = t.partial_residual_wrt_param(&u, params::E).unwrap();
+        let mut dr = [0.0; 4];
+        t.partial_residual_wrt_param(&u, params::E, &mut dr).unwrap();
         // ∂f/∂E = (A/L) * ε * [-c, -s, c, s]
         // A = ea_over_l / E * L = (200e9 * 0.01 / 2) / 200e9 * 2 = 0.01
         let a = 0.01_f64;
@@ -511,7 +544,14 @@ mod tests {
         // Commit different strains
         t1.commit(&[0.0, 0.0, 1e-3, 0.0]).unwrap();
         t2_box.commit(&[0.0, 0.0, 2e-3, 0.0]).unwrap();
+        
         // Stiffness matrices should still be equal (linear elastic)
-        assert_eq!(t1.ke_flat(&[0.0; 4]), t2_box.ke_flat(&[0.0; 4]));
+        let mut ke1 = [0.0; 16];
+        t1.ke_flat(&[0.0; 4], &mut ke1);
+        
+        let mut ke2 = [0.0; 16];
+        t2_box.ke_flat(&[0.0; 4], &mut ke2);
+        
+        assert_eq!(ke1, ke2);
     }
 }

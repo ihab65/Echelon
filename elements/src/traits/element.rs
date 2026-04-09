@@ -47,11 +47,11 @@ pub trait Element: Send + Sync {
     /// # Returns
     /// `Vec<f64>` of length `n_dof()²`, row-major.  Pass directly to
     /// `SymCsrMatrix::scatter_add`.
-    fn ke_flat(&self, u: &[f64]) -> Vec<f64>;
+    fn ke_flat(&self, u: &[f64], out: &mut [f64]);
 
     /// Returns the element's mass matrix (lumped) as a flat array.
     /// The length of the returned vector should be `n_dof()`.
-    fn mass_flat(&self) -> Vec<f64>;
+    fn mass_flat(&self, out: &mut [f64]);
 
     /// Internal force vector in **global** coordinates, for displacement `u`.
     ///
@@ -60,7 +60,7 @@ pub trait Element: Send + Sync {
     ///
     /// # Returns
     /// `Vec<f64>` of length `n_dof()`.
-    fn f_int(&self, u: &[f64]) -> Vec<f64>;
+    fn f_int(&self, u: &[f64], out: &mut [f64]);
 
     /// Commit the current state as converged.
     ///
@@ -96,8 +96,8 @@ pub trait Element: Send + Sync {
     /// # Default implementation
     ///
     /// Returns a zero vector. Override in elements that carry distributed loads.
-    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams) -> Vec<f64> {
+    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams, out_f: &mut [f64]) {
         let _ = params;
-        vec![0.0; self.n_dof()]
+        out_f.fill(0.0);
     }
 }

@@ -26,107 +26,94 @@
 //! (path-dependent) materials.  Those elements implement only `Element`,
 //! and sensitivity is handled by `AdjointSensitive` at the material level.
 
+use crate::traits::Element;
+
 /// Extension of `Element` for elements that can define a scalar strain energy.
-///
-/// # Type parameter `T`
-///
-/// `T` is the numeric scalar type.  For Engine A (forward analysis) `T = f64`.
-/// For Engine B (sensitivity) `T` is a dual number type from `num-dual`:
-/// - `Dual64` — first-order forward-mode AD (gradients)
-/// - `HyperDual64` — second-order AD (Hessians, for flexibility sensitivity)
-///
-/// The `DualNum` bound from `num-dual` provides the arithmetic operations
-/// needed.  When the `autodiff` feature is disabled, this trait is still
-/// usable with `T = f64`.
-///
-/// # Default `ke_flat` and `f_int`
-///
-/// The default implementations use finite differences over `energy` to
-/// produce stiffness and residual.  This is correct but slower than a
-/// closed-form implementation.  Concrete elements override these where
-/// performance matters.
-pub trait DifferentiableElement: crate::traits::Element {
-    /// Scalar strain energy as a function of nodal displacements.
-    ///
-    /// This function must be:
-    /// 1. **Generic over `T`** — callable with `T = f64` and `T = Dual64`.
-    /// 2. **Pure** — no side effects, no mutation.
-    /// 3. **Smooth** — continuously differentiable in `u`.
-    ///
-    /// # Arguments
-    /// * `u` — slice of length `n_dof()` as generic type `T`
-    ///
-    /// # Example (2D truss)
-    /// ```rust,ignore
-    /// fn energy<T: DualNum<f64> + Copy>(&self, u: &[T]) -> T {
-    ///     let u1 = u[0] * T::from(self.cos) + u[1] * T::from(self.sin);
-    ///     let u2 = u[2] * T::from(self.cos) + u[3] * T::from(self.sin);
-    ///     let delta = u2 - u1;
-    ///     T::from(0.5 * self.ea_over_l) * delta * delta
-    /// }
-    /// ```
+pub trait DifferentiableElement: Element {
+    /// Scalar strain energy: `W = E(u)`
     fn energy_f64(&self, u: &[f64]) -> f64;
 
-    /// Stiffness matrix via finite-difference approximation of `energy_f64`.
-    ///
-    /// Default implementation: second-order central differences.
-    /// Override with a closed-form expression for performance-critical elements.
-    fn ke_flat_from_energy(&self, u: &[f64]) -> Vec<f64> {
+    /// Stiffness matrix via finite-difference Hessian of `energy_f64`.
+    /// 
+    /// Default implementation: central differences with optimal math for 
+    /// diagonal and off-diagonal terms. Writes directly into `out_ke` 
+    /// to avoid heap allocations.
+    fn ke_flat_from_energy(&self, u: &[f64], out: &mut [f64]) {
         let n = self.n_dof();
-        let h = 1e-7;
-        let mut ke = vec![0.0_f64; n * n];
+        debug_assert_eq!(out.len(), n * n);
+        let h = 1e-6; // FD step size
 
-        // Hessian via central finite differences:
-        //   ∂²W/∂uᵢ∂uⱼ ≈ [W(u+hᵢ+hⱼ) - W(u+hᵢ-hⱼ) - W(u-hᵢ+hⱼ) + W(u-hᵢ-hⱼ)] / (4h²)
-        let mut u_pp = u.to_vec();
-        let mut u_pm = u.to_vec();
-        let mut u_mp = u.to_vec();
-        let mut u_mm = u.to_vec();
+        // We only need ONE working vector, dramatically reducing allocations
+        let mut u_work = u.to_vec();
+        
+        // Base energy evaluated once for the diagonal formula
+        let e_0 = self.energy_f64(u);
 
         for i in 0..n {
             for j in i..n {
-                u_pp[i] = u[i] + h; u_pp[j] = u[j] + h;
-                u_pm[i] = u[i] + h; u_pm[j] = u[j] - h;
-                u_mp[i] = u[i] - h; u_mp[j] = u[j] + h;
-                u_mm[i] = u[i] - h; u_mm[j] = u[j] - h;
+                let kij = if i == j {
+                    // Corrected formula for the Diagonal: ∂²E / ∂u_i²
+                    // (E(x+h) - 2E(x) + E(x-h)) / h²
+                    u_work[i] = u[i] + h;
+                    let e_p = self.energy_f64(&u_work);
 
-                let kij = (self.energy_f64(&u_pp)
-                    - self.energy_f64(&u_pm)
-                    - self.energy_f64(&u_mp)
-                    + self.energy_f64(&u_mm))
-                    / (4.0 * h * h);
+                    u_work[i] = u[i] - h;
+                    let e_m = self.energy_f64(&u_work);
 
-                ke[i * n + j] = kij;
-                ke[j * n + i] = kij; // symmetric
+                    (e_p - 2.0 * e_0 + e_m) / (h * h)
+                } else {
+                    // Off-diagonal: ∂²E / ∂u_i ∂u_j
+                    // (E(x+h,y+h) - E(x+h,y-h) - E(x-h,y+h) + E(x-h,y-h)) / 4h²
+                    u_work[i] = u[i] + h; u_work[j] = u[j] + h;
+                    let e_pp = self.energy_f64(&u_work);
 
-                // Restore
-                u_pp[i] = u[i]; u_pp[j] = u[j];
-                u_pm[i] = u[i]; u_pm[j] = u[j];
-                u_mp[i] = u[i]; u_mp[j] = u[j];
-                u_mm[i] = u[i]; u_mm[j] = u[j];
+                    u_work[i] = u[i] + h; u_work[j] = u[j] - h;
+                    let e_pm = self.energy_f64(&u_work);
+
+                    u_work[i] = u[i] - h; u_work[j] = u[j] + h;
+                    let e_mp = self.energy_f64(&u_work);
+
+                    u_work[i] = u[i] - h; u_work[j] = u[j] - h;
+                    let e_mm = self.energy_f64(&u_work);
+
+                    (e_pp - e_pm - e_mp + e_mm) / (4.0 * h * h)
+                };
+
+                // Write directly to the output buffer
+                out[i * n + j] = kij;
+                out[j * n + i] = kij; // Symmetric mirror
+
+                // Restore working vector exactly to original state
+                u_work[i] = u[i];
+                u_work[j] = u[j];
             }
         }
-        ke
     }
 
     /// Internal force via finite-difference gradient of `energy_f64`.
     ///
-    /// Default implementation: central differences.
-    /// Override with a closed-form expression for performance.
-    fn f_int_from_energy(&self, u: &[f64]) -> Vec<f64> {
+    /// Default implementation: central differences. Writes directly 
+    /// into `out_f` to avoid heap allocations.
+    fn f_int_from_energy(&self, u: &[f64], out: &mut [f64]) {
         let n = self.n_dof();
-        let h = 1e-7;
-        let mut f = vec![0.0_f64; n];
-        let mut u_p = u.to_vec();
-        let mut u_m = u.to_vec();
+        debug_assert_eq!(out.len(), n);
+        let h = 1e-6;
+
+        // One working vector
+        let mut u_work = u.to_vec();
 
         for i in 0..n {
-            u_p[i] = u[i] + h;
-            u_m[i] = u[i] - h;
-            f[i] = (self.energy_f64(&u_p) - self.energy_f64(&u_m)) / (2.0 * h);
-            u_p[i] = u[i];
-            u_m[i] = u[i];
+            u_work[i] = u[i] + h;
+            let e_plus = self.energy_f64(&u_work);
+
+            u_work[i] = u[i] - h;
+            let e_minus = self.energy_f64(&u_work);
+
+            // Write directly to the output buffer
+            out[i] = (e_plus - e_minus) / (2.0 * h);
+
+            // Restore working vector
+            u_work[i] = u[i]; 
         }
-        f
     }
 }
