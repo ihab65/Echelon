@@ -67,14 +67,27 @@ impl Recorder for ElementRecorder {
             return;
         };
 
+        let n = elem.n_dof();
         let dof_map = elem.dof_map();
-        let u_local: Vec<f64> = dof_map
-            .as_usize_slice()
-            .iter()
-            .map(|&g| if g < model.u_global.len() { model.u_global[g] } else { 0.0 })
-            .collect();
+        
+        // 1. Allocate the memory for this time step exactly once
+        let mut u_local = vec![0.0; n];
+        let mut f_local = vec![0.0; n];
 
-        self.data.push(elem.f_int(&u_local));
+        // 2. Extract displacements cleanly without .collect()
+        let globals = dof_map.as_usize_slice();
+        for i in 0..n {
+            let g = globals[i];
+            if g < model.u_global.len() {
+                u_local[i] = model.u_global[g];
+            }
+        }
+
+        // 3. Compute internal forces straight into the f_local buffer
+        elem.f_int(&u_local, &mut f_local);
+
+        // 4. Store the result in the history
+        self.data.push(f_local);
     }
 
     fn description(&self) -> String {
