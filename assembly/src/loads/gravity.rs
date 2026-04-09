@@ -76,9 +76,21 @@ impl LoadPattern for GravityLoad {
         let scale = self.series.factor_at(pseudo_time) * alpha;
         let ndf   = model.dim.ndf();
 
+        // 1. Adaptive Buffer: Find the max DOFs needed by any element
+        let max_dof = model.elements.iter().map(|e| e.n_dof()).max().unwrap_or(0);
+        
+        // 2. Allocate exactly ONCE per load application pass
+        let mut mass_buffer = vec![0.0; max_dof * max_dof];
+
         for elem in model.elements.iter() {
-            let mass    = elem.mass_flat(); // flat n×n lumped mass matrix
             let n_local = elem.n_dof();
+            
+            // 3. Take a mutable slice sized perfectly for this element
+            let mass = &mut mass_buffer[..n_local * n_local];
+            
+            // 4. Extract mass directly into the stack/pre-allocated buffer!
+            elem.mass_flat(mass);
+
             let dof_map = elem.dof_map();
             let globals = dof_map.as_usize_slice();
 
@@ -96,6 +108,7 @@ impl LoadPattern for GravityLoad {
             }
         }
     }
+
 
     fn clone_box(&self) -> Box<dyn LoadPattern> {
         Box::new(GravityLoad {

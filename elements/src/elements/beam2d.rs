@@ -171,19 +171,6 @@ impl ElasticBeam2d {
         kg_flat.copy_from_slice(mat_as_slice(&kg_arr));
         kg_flat
     }
-
-    /// Rotate a local 6-DOF force vector to global coordinates: `f_global = Tᵀ f_local`.
-    fn rotate_to_global(&self, f_local: &[f64; 6]) -> Vec<f64> {
-        let t = self.transf.t_matrix_6x6();
-        let mut fg = [0.0_f64; 6];
-        for i in 0..6 {
-            for j in 0..6 {
-                // Tᵀ[i,j] = T[j,i]
-                fg[i] += t[j][i] * f_local[j];
-            }
-        }
-        fg.to_vec()
-    }
 }
 
 // -----------------------------------------------------------------
@@ -194,12 +181,15 @@ impl Element for ElasticBeam2d {
     #[inline]
     fn n_dof(&self) -> usize { 6 }
 
-    fn ke_flat(&self, _u: &[f64]) -> Vec<f64> {
+    fn ke_flat(&self, _u: &[f64], out: &mut [f64]) {
         // Linear elastic: stiffness is displacement-independent.
-        self.ke_global_flat().to_vec()
+        debug_assert_eq!(out.len(), 36);
+        out.copy_from_slice(
+            &self.ke_global_flat()
+        )
     }
 
-    fn mass_flat(&self) -> Vec<f64> {
+    fn mass_flat(&self, out: &mut [f64]) {
         // If the user didn't define rho, the mass is zero.
         // The assembly/analysis (Eigen or Transiant) crate 
         // will intercept all-zero mass matrices if needed.
@@ -207,36 +197,38 @@ impl Element for ElasticBeam2d {
         let m_total = rho * self.a() * self.length();
         let m_half = m_total / 2.0;
 
-        let mut lumped_mass = vec![0.0_f64; 36];
+        debug_assert_eq!(out.len(), 36);
+        out.fill(0.0); // initialize all entries to zero
         // Node 1 (UX, UY, RZ)
-        lumped_mass[0]  = m_half;       // Row 0, Col 0: u1_x
-        lumped_mass[7]  = m_half;       // Row 1, Col 1: u1_y
-        lumped_mass[14] = 1e-9;         // Row 2, Col 2: u1_theta
+        out[0]  = m_half;       // Row 0, Col 0: u1_x
+        out[7]  = m_half;       // Row 1, Col 1: u1_y
+        out[14] = 1e-9;         // Row 2, Col 2: u1_theta
         
         // Node 2 (UX, UY, RZ)
-        lumped_mass[21] = m_half;       // Row 3, Col 3: u2_x
-        lumped_mass[28] = m_half;       // Row 4, Col 4: u2_y
-        lumped_mass[35] = 1e-9;         // Row 5, Col 5: u2_theta
-        
-        lumped_mass
+        out[21] = m_half;       // Row 3, Col 3: u2_x
+        out[28] = m_half;       // Row 4, Col 4: u2_y
+        out[35] = 1e-9;         // Row 5, Col 5: u2_theta
     }
 
-    fn f_int(&self, u: &[f64]) -> Vec<f64> {
+    fn f_int(&self, u: &[f64], out: &mut [f64]) {
         debug_assert_eq!(u.len(), 6);
+        debug_assert_eq!(out.len(), 6); // Add safety check for the out buffer
+        
         // Compute in local frame, then rotate to global.
         let ul = self.u_local(u);
         let fl = f_int_local_from_ke(&self.ke_local_cached, &ul);
 
         // Rotate back: f_global = Tᵀ * f_local
         let t = self.transf.t_matrix_6x6();
-        let mut fg = [0.0_f64; 6];
+        
+        out.fill(0.0);
+        
         for i in 0..6 {
             for j in 0..6 {
                 // Tᵀ[i,j] = T[j,i]
-                fg[i] += t[j][i] * fl[j];
+                out[i] += t[j][i] * fl[j];
             }
         }
-        fg.to_vec()
     }
 
     fn commit(&mut self, u: &[f64]) -> Result<()> {
@@ -257,12 +249,14 @@ impl Element for ElasticBeam2d {
 
     fn type_name(&self) -> &'static str { "ElasticBeam2d" }
 
-    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams) -> Vec<f64> {
+    fn equivalent_nodal_forces(&self, params: &crate::traits::ElementLoadParams, out: &mut [f64]) {
         use crate::traits::ElementLoadParams;
 
         let l  = self.transf.length;
         let l2 = l * l;
         let l3 = l2 * l;
+
+        debug_assert_eq!(out.len(), 6); // Safety check
 
         // All formulas produce forces in LOCAL coordinates:
         //   [N_i, V_i, M_i, N_j, V_j, M_j]
@@ -352,7 +346,17 @@ impl Element for ElasticBeam2d {
             }
         };
 
-        self.rotate_to_global(&f_local)
+        let t = self.transf.t_matrix_6x6();
+        
+        // CRITICAL: Zero out the buffer before accumulating!
+        out.fill(0.0);
+        
+        for i in 0..6 {
+            for j in 0..6 {
+                // Tᵀ[i,j] = T[j,i]
+                out[i] += t[j][i] * f_local[j];
+            }
+        }
     }
 }
 
@@ -377,13 +381,13 @@ impl DifferentiableElement for ElasticBeam2d {
     }
 
     /// Override with the closed-form global stiffness — exact for linear beam.
-    fn ke_flat_from_energy(&self, u: &[f64]) -> Vec<f64> {
-        self.ke_flat(u)
+    fn ke_flat_from_energy(&self, u: &[f64], out: &mut [f64]) {
+        self.ke_flat(u, out)
     }
 
     /// Override with the closed-form residual.
-    fn f_int_from_energy(&self, u: &[f64]) -> Vec<f64> {
-        self.f_int(u)
+    fn f_int_from_energy(&self, u: &[f64], out: &mut [f64]) {
+        self.f_int(u, out)
     }
 }
 
@@ -406,8 +410,9 @@ impl Assembleable for ElasticBeam2d {
         &self.dof_map
     }
 
-    fn partial_residual_wrt_param(&self, u_global: &[f64], param_idx: usize) -> Result<Vec<f64>> {
+    fn partial_residual_wrt_param(&self, u_global: &[f64], param_idx: usize, out: &mut [f64]) -> Result<()> {
         debug_assert_eq!(u_global.len(), 6);
+        debug_assert_eq!(out.len(), 6); // Safety check for output buffer
 
         let e  = self.material.e;
         let a  = self.a;
@@ -450,13 +455,13 @@ impl Assembleable for ElasticBeam2d {
 
         // Rotate back to global: ∂f_global/∂θ = Tᵀ * ∂f_local/∂θ
         let t = self.transf.t_matrix_6x6();
-        let mut dfg = [0.0_f64; 6];
+        out.fill(0.0);
         for i in 0..6 {
             for j in 0..6 {
-                dfg[i] += t[j][i] * dfl_local[j];
+                out[i] += t[j][i] * dfl_local[j];
             }
         }
-        Ok(dfg.to_vec())
+        Ok(())
     }
 
     fn n_params(&self) -> usize { 3 }
@@ -475,6 +480,7 @@ impl Assembleable for ElasticBeam2d {
 // Tests
 // -----------------------------------------------------------------
 
+#[cfg(test)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -509,7 +515,8 @@ mod tests {
 
     #[test]
     fn ke_flat_symmetric() {
-        let ke = cantilever().ke_flat(&[0.0; 6]);
+        let mut ke = [0.0; 36];
+        cantilever().ke_flat(&[0.0; 6], &mut ke);
         for i in 0..6 {
             for j in 0..6 {
                 assert!(
@@ -524,7 +531,9 @@ mod tests {
     #[test]
     fn ke_flat_axial_diagonal() {
         let b = cantilever();
-        let ke = b.ke_flat(&[0.0; 6]);
+        let mut ke = [0.0; 36];
+        b.ke_flat(&[0.0; 6], &mut ke);
+        
         let eal = b.e() * b.a() / b.length();
         // Horizontal element: ke[0,0] = EA/L, ke[3,3] = EA/L
         assert!((ke[0]  - eal).abs() < 1e-3);
@@ -534,7 +543,9 @@ mod tests {
     #[test]
     fn ke_flat_bending_diagonal() {
         let b = cantilever();
-        let ke = b.ke_flat(&[0.0; 6]);
+        let mut ke = [0.0; 36];
+        b.ke_flat(&[0.0; 6], &mut ke);
+        
         let l  = b.length();
         let ei = b.e() * b.iz();
         let b1 = 12.0 * ei / (l * l * l);
@@ -548,7 +559,8 @@ mod tests {
 
     #[test]
     fn f_int_zero_displacement_is_zero() {
-        let f = cantilever().f_int(&[0.0; 6]);
+        let mut f = [0.0; 6];
+        cantilever().f_int(&[0.0; 6], &mut f);
         assert!(f.iter().all(|&v| v.abs() < 1e-10));
     }
 
@@ -558,7 +570,10 @@ mod tests {
         let delta = 1e-3;
         // Pure axial elongation: u2 = delta
         let u = [0.0, 0.0, 0.0, delta, 0.0, 0.0];
-        let f = b.f_int(&u);
+        
+        let mut f = [0.0; 6];
+        b.f_int(&u, &mut f);
+        
         let eal = b.e() * b.a() / b.length();
         assert!((f[0] - -eal * delta).abs() < 1.0);
         assert!((f[3] -  eal * delta).abs() < 1.0);
@@ -582,8 +597,11 @@ mod tests {
         // W = ½ uᵀ f_int for linear elastic
         let b = cantilever();
         let u = [0.0, 0.0, 0.0, 1e-3, 1e-4, 5e-4];
-        let w    = b.energy_f64(&u);
-        let f    = b.f_int(&u);
+        let w = b.energy_f64(&u);
+        
+        let mut f = [0.0; 6];
+        b.f_int(&u, &mut f);
+        
         let w_kf = 0.5 * u.iter().zip(f.iter()).map(|(ui, fi)| ui * fi).sum::<f64>();
         assert!((w - w_kf).abs() / w_kf.abs() < 1e-10, "W={w:.6e} W_kf={w_kf:.6e}");
     }
@@ -620,7 +638,8 @@ mod tests {
         let b = cantilever();
         // Pure axial elongation
         let u = [0.0, 0.0, 0.0, 1e-3, 0.0, 0.0];
-        let dr = b.partial_residual_wrt_param(&u, params::E).unwrap();
+        let mut dr = [0.0; 6]; 
+        b.partial_residual_wrt_param(&u, params::E, &mut dr).unwrap();
         assert_eq!(dr.len(), 6);
         // For axial strain ε = 1e-3/2:
         // ∂f[0]/∂E = -(A/L) * ε = -(0.01/2) * 5e-4 = -1.25e-6

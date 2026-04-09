@@ -79,7 +79,15 @@ pub fn assemble_partial_residual(
     param_idx:  usize,
     dp_dtheta:  &mut [f64],
 ) -> Result<()> {
+    // 1. Clear the global sensitivity vector
     dp_dtheta.fill(0.0);
+
+    // 2. Adaptive Buffers: Find the max DOFs needed by any element
+    let max_dof = model.elements.iter().map(|e| e.n_dof()).max().unwrap_or(0);
+    
+    // 3. Allocate EXACTLY ONCE per assembly pass
+    let mut u_buffer  = vec![0.0; max_dof];
+    let mut df_buffer = vec![0.0; max_dof];
 
     let mut offset = 0_usize;
 
@@ -90,15 +98,21 @@ pub fn assemble_partial_residual(
         // Check whether this element owns `param_idx`
         if param_idx >= offset && param_idx < end {
             let local_param = param_idx - offset;
-
-            let dof_map    = element.dof_map();
-            let u_local    = extract_local_u(&model.u_global, dof_map);
+            
+            let n           = element.n_dof();
+            let dof_map     = element.dof_map();
             let global_dofs = dof_map.as_usize_slice();
 
-            // Delegate to the element's analytical ∂f_int/∂θ
-            let df_local = element.partial_residual_wrt_param(&u_local, local_param)?;
+            // 4. Take mutable slices perfectly sized for this specific element
+            let u_local  = &mut u_buffer[..n];
+            let df_local = &mut df_buffer[..n];
 
-            // Scatter into dp_dtheta
+            // 5. Zero-allocation extraction and physics computation!
+            // (Using the updated traits from the previous steps)
+            extract_local_u(&model.u_global, dof_map, u_local);
+            element.partial_residual_wrt_param(u_local, local_param, df_local)?;
+
+            // 6. Manual scatter into dp_dtheta
             for (local_i, &val) in df_local.iter().enumerate() {
                 let g = global_dofs[local_i];
                 if g < dp_dtheta.len() {

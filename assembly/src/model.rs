@@ -359,31 +359,53 @@ impl Model {
     /// Panics if `build_state` has not been called (i.e. `u_global` is empty).
     pub fn compute_reactions(&mut self) -> &[f64] {
         let n = self.n_dof();
-        self.reactions.resize(n, 0.0);
+        
+        // Resize only if the model size has grown, avoiding unnecessary reallocation
+        if self.reactions.len() < n {
+            self.reactions.resize(n, 0.0);
+        }
         self.reactions.fill(0.0);
 
-        // Assemble F_int from all elements
+        // 1. Adaptive Buffers: Find the max DOFs needed by any element
+        let max_dof = self.elements.iter().map(|e| e.n_dof()).max().unwrap_or(0);
+        let mut u_buffer = vec![0.0; max_dof];
+        let mut f_buffer = vec![0.0; max_dof];
+
+        // 2. Assemble F_int from all elements
         for element in &self.elements {
+            let n_el    = element.n_dof();
             let dof_map = element.dof_map();
-            let u_local: Vec<f64> = dof_map
-                .as_usize_slice()
-                .iter()
-                .map(|&g| self.u_global[g])
-                .collect();
-            let f_int = element.f_int(&u_local);
-            for (local_i, &global_dof) in dof_map.as_usize_slice().iter().enumerate() {
-                self.reactions[global_dof] += f_int[local_i];
+            
+            // Slice the perfect size for this element
+            let u_local = &mut u_buffer[..n_el];
+            let f_local = &mut f_buffer[..n_el];
+
+            // Extract global displacements (Zero Allocation!)
+            let global_dofs = dof_map.as_usize_slice();
+            for (i, &g) in global_dofs.iter().enumerate() {
+                u_local[i] = self.u_global[g];
+            }
+
+            // Compute internal forces directly into f_local (Zero Allocation!)
+            element.f_int(u_local, f_local);
+
+            // Scatter into reactions
+            for (local_i, &global_dof) in global_dofs.iter().enumerate() {
+                self.reactions[global_dof] += f_local[local_i];
             }
         }
 
-        // Zero out unconstrained DOFs — reactions only exist at supports
-        // Build a mask of constrained DOFs
+        // 3. Zero out unconstrained DOFs — reactions only exist at supports
+        // NOTE: If you are calling compute_reactions() inside a dynamic time-history loop 
+        // and want absolute 100% zero-allocation, you should move `is_constrained` 
+        // into the `Model` struct as a persistent field so it's only allocated once!
         let mut is_constrained = vec![false; n];
         for c in &self.constraints {
             if c.global_dof < n {
                 is_constrained[c.global_dof] = true;
             }
         }
+        
         for (r, &constrained) in self.reactions.iter_mut().zip(is_constrained.iter()) {
             if !constrained {
                 *r = 0.0;

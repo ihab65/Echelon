@@ -135,9 +135,21 @@ impl LoadPattern for UniformExcitation {
 
         let ndf = model.dim.ndf();
 
+        // 1. Adaptive Buffer: Find the max DOFs needed by any element
+        let max_dof = model.elements.iter().map(|e| e.n_dof()).max().unwrap_or(0);
+        
+        // 2. Allocate exactly ONCE per load evaluation
+        let mut mass_buffer = vec![0.0; max_dof * max_dof];
+
         for elem in model.elements.iter() {
-            let mass    = elem.mass_flat();
             let n_local = elem.n_dof();
+            
+            // 3. Take a mutable slice perfectly sized for this element
+            let mass = &mut mass_buffer[..n_local * n_local];
+            
+            // 4. Extract mass directly into the stack/pre-allocated buffer!
+            elem.mass_flat(mass);
+
             let dof_map = elem.dof_map();
             let globals = dof_map.as_usize_slice();
 
@@ -146,6 +158,7 @@ impl LoadPattern for UniformExcitation {
                 let global_dof = globals[local_i];
 
                 if dof_type == self.dof_dir && global_dof < f_ext.len() {
+                    // Read directly from the diagonal of the flat buffer
                     let m_ii = mass[local_i * n_local + local_i];
                     // P_eff = -M * a_g  (inertial force opposes ground acceleration)
                     f_ext[global_dof] -= m_ii * accel;

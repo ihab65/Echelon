@@ -56,10 +56,21 @@ use crate::model::Model;
 /// the converged strain falls outside the constitutive model's valid range
 /// (e.g., fracture strain exceeded in a softening model).
 pub fn commit_state(model: &mut Model) -> Result<()> {
+    let max_dof = model.elements.iter().map(|e| e.n_dof()).max().unwrap_or(0);
+    
+    let mut u_buffer = vec![0.0; max_dof];
+
     for element in &mut model.elements {
-        let u_local = extract_local_u(&model.u_global, element.dof_map());
-        element.commit(&u_local)?;
+        let n       = element.n_dof();
+        let dof_map = element.dof_map();
+        
+        let u_local = &mut u_buffer[..n];
+
+        extract_local_u(&model.u_global, dof_map, u_local);
+        
+        element.commit(u_local)?;
     }
+    
     Ok(())
 }
 
@@ -144,7 +155,7 @@ mod tests {
         revert_state(&mut model);
     }
 
-    #[test]
+#[test]
     fn revert_after_commit_restores_state() {
         let mut model = two_node_truss();
 
@@ -158,10 +169,17 @@ mod tests {
         // Revert: should go back to committed state A
         revert_state(&mut model);
 
-        // After revert, ke_flat should be the same (linear elastic, so always equal)
-        // but this confirms revert does not panic and the element is still usable
-        let u_local = extract_local_u(&model.u_global, model.elements[0].dof_map());
-        let _f = model.elements[0].f_int(&u_local);
+        // ZERO ALLOCATION TEST UPDATES:
+        let dof_map = model.elements[0].dof_map();
+        
+        // 1. Pre-allocate and extract local displacements
+        let mut u_local = [0.0; 4]; // Truss2d has 4 DOFs
+        crate::kinematics::extract::extract_local_u(&model.u_global, dof_map, &mut u_local);
+        
+        // 2. Pre-allocate and compute internal forces
+        let mut f_buffer = [0.0; 4];
+        model.elements[0].f_int(&u_local, &mut f_buffer);
+        
         // If we reach here without panic, revert worked correctly
     }
 

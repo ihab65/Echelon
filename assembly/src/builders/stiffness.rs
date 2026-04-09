@@ -60,12 +60,28 @@ use crate::model::Model;
 pub fn assemble_stiffness(model: &Model, k: &mut SymCsrMatrix<f64>) -> Result<()> {
     k.zero();
 
-    for element in &model.elements {
-        let dof_map = element.dof_map();
-        let u_local = extract_local_u(&model.u_global, dof_map);
+    // Adaptive Buffer: Find the max DOFs needed by any element
+    let max_dof = model.elements
+        .iter()
+        .map(|e| e.n_dof())
+        .max()
+        .unwrap_or(0);
+    
+    // Allocate exactly ONCE per assembly pass
+    let mut u_buffer  = vec![0.0; max_dof];
+    let mut ke_buffer = vec![0.0; max_dof * max_dof];
 
-        let ke = element.ke_flat(&u_local);
-        k.scatter_add(&ke, dof_map.as_usize_slice())?;
+    for element in &model.elements {
+        let n = element.n_dof();
+        let dof_map = element.dof_map();
+
+        // 3. Take a mutable slice sized perfectly for this element
+        let u_local = &mut u_buffer[..n];
+        let ke_local = &mut ke_buffer[..n * n];
+
+        extract_local_u(&model.u_global, dof_map, u_local);
+        element.ke_flat(&u_local, ke_local);
+        k.scatter_add(&ke_local, dof_map.as_usize_slice())?;
     }
 
     Ok(())
