@@ -51,8 +51,20 @@ use crate::model::Model;
 pub fn assemble_mass(model: &Model, m_global: &mut SymCsrMatrix<f64>) -> Result<()> {
     m_global.zero();
 
+    // Adaptive Buffer: Find the max DOFs needed by any element
+    let max_dof = model.elements
+        .iter()
+        .map(|e| e.n_dof())
+        .max()
+        .unwrap_or(0);
+
+    let mut m_buffer = vec![0.0; max_dof * max_dof];
+
     for (elem_idx, element) in model.elements.iter().enumerate() {
-        let me = element.mass_flat();
+        let n = element.n_dof();
+        let me = &mut m_buffer[..n*n];
+        
+        element.mass_flat(me);
 
         // Guard: if all entries are zero the element has no density.
         // This is always a user error when mass assembly is requested.
@@ -62,7 +74,7 @@ pub fn assemble_mass(model: &Model, m_global: &mut SymCsrMatrix<f64>) -> Result<
         }
 
         let dof_map = element.dof_map();
-        m_global.scatter_add(&me, dof_map.as_usize_slice())?;
+        m_global.scatter_add(me, dof_map.as_usize_slice())?;
     }
 
     Ok(())
@@ -95,6 +107,23 @@ pub fn assemble_mass(model: &Model, m_global: &mut SymCsrMatrix<f64>) -> Result<
 ///
 /// # Errors
 /// - [`AssemblyError::MissingDensity`] if any element has no density.
+// -----------------------------------------------------------------
+// assemble_self_weight
+// -----------------------------------------------------------------
+
+/// Compute gravity loads `F = M_e × g` and scatter into `f_ext`.
+///
+/// For each element:
+/// 1. Fetches the lumped mass matrix (via the zero-allocation `mass_flat` buffer).
+/// 2. Multiplies the vertical (y-direction) mass entries on the diagonal by `gravity_accel`.
+/// 3. Adds the result to `f_ext` at the corresponding vertical DOFs.
+///
+/// `gravity_accel` should be **negative** if downward loads are expressed as
+/// negative forces in the global Y axis (structural convention). Typically:
+/// `gravity_accel = -9.81` m/s².
+///
+/// # Errors
+/// - [`AssemblyError::MissingDensity`] if any element has no density.
 pub fn assemble_self_weight(
     model:         &Model,
     gravity_accel: f64,
@@ -102,33 +131,37 @@ pub fn assemble_self_weight(
 ) -> Result<()> {
     let ndf = model.dim.ndf();
 
-    for (elem_idx, element) in model.elements.iter().enumerate() {
-        let me = element.mass_flat();
-        let n  = element.n_dof();
+    // 1. Adaptive Buffer: Find the max DOFs needed by any element
+    let max_dof = model.elements.iter().map(|e| e.n_dof()).max().unwrap_or(0);
+    
+    // 2. Allocate exactly ONCE per assembly pass
+    let mut me_buffer = vec![0.0; max_dof * max_dof];
 
-        // Extract diagonal of the mass matrix (lumped mass per DOF)
-        let n_local = (me.len() as f64).sqrt() as usize;
-        let diagonal: Vec<f64> = (0..n_local)
-            .map(|i| me[i * n_local + i])
-            .collect();
+    for (elem_idx, element) in model.elements.iter().enumerate() {
+        let n = element.n_dof();
+        
+        // 3. Take a mutable slice sized perfectly for this element
+        let me_local = &mut me_buffer[..n * n];
+        
+        // 4. Extract mass with zero heap allocations
+        element.mass_flat(me_local);
 
         // Detect missing density by checking only the Y-direction (translational)
-        // diagonal entries — rotation DOFs legitimately carry near-zero mass
-        // (stub values like 1e-9) even without density, so checking all entries
-        // would give false negatives for beam elements.
+        // diagonal entries. Diagonal entry index in a flattened n x n matrix is (i * n + i).
         let y_mass_zero = (0..n).all(|local_dof| {
             let node_local_dof = local_dof % ndf;
             if node_local_dof == 1 {
-                diagonal[local_dof].abs() < f64::EPSILON
+                me_local[local_dof * n + local_dof].abs() < f64::EPSILON
             } else {
                 true // non-Y DOFs don't count for this check
             }
         });
+        
         if y_mass_zero {
             return Err(AssemblyError::MissingDensity { element_idx: elem_idx });
         }
 
-        let dof_map    = element.dof_map();
+        let dof_map     = element.dof_map();
         let global_dofs = dof_map.as_usize_slice();
 
         // Scatter gravity force: F_y = mass_at_dof × gravity_accel
@@ -139,12 +172,11 @@ pub fn assemble_self_weight(
                 // This is a Y-displacement DOF
                 let global_dof = global_dofs[local_dof];
                 if global_dof < f_ext.len() {
-                    f_ext[global_dof] += diagonal[local_dof] * gravity_accel;
+                    // 5. Read directly from the diagonal of the flat buffer!
+                    f_ext[global_dof] += me_local[local_dof * n + local_dof] * gravity_accel;
                 }
             }
         }
-
-        let _ = n;
     }
 
     Ok(())

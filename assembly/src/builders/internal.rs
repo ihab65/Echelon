@@ -42,18 +42,31 @@ use crate::model::Model;
 /// future compatibility (e.g., nonlinear elements that can detect ill-posed
 /// states during `f_int` evaluation).
 pub fn assemble_internal_force(model: &Model, f_int: &mut [f64]) -> Result<()> {
+    // 1. Clear the global internal force vector
     f_int.fill(0.0);
 
+    // 2. Adaptive Buffers: Find the max DOFs needed by any element
+    let max_dof = model.elements.iter().map(|e| e.n_dof()).max().unwrap_or(0);
+    
+    // 3. Allocate EXACTLY ONCE per assembly pass
+    let mut u_buffer  = vec![0.0; max_dof];
+    let mut fe_buffer = vec![0.0; max_dof];
+
     for element in &model.elements {
+        let n       = element.n_dof();
         let dof_map = element.dof_map();
-        let u_local = extract_local_u(&model.u_global, dof_map);
+        
+        // 4. Take mutable slices perfectly sized for this specific element
+        let u_local  = &mut u_buffer[..n];
+        let fe_local = &mut fe_buffer[..n];
 
-        let fe = element.f_int(&u_local);
+        // 5. Zero-allocation extraction and physics computation!
+        extract_local_u(&model.u_global, dof_map, u_local);
+        element.f_int(u_local, fe_local);
+
+        // 6. Manual scatter into the global vector
         let global_dofs = dof_map.as_usize_slice();
-
-        // Manual scatter — same logic as the general CSR scatter_add but
-        // operating on a plain slice rather than a sparse matrix.
-        for (local_idx, &val) in fe.iter().enumerate() {
+        for (local_idx, &val) in fe_local.iter().enumerate() {
             let global_dof = global_dofs[local_idx];
             f_int[global_dof] += val;
         }

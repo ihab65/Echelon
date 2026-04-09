@@ -228,15 +228,21 @@ impl LoadPattern for ElementLoad {
     ) {
         let Some(elem) = model.elements.get(self.elem_id.0) else {
             // Element index out of range — silently skip rather than panic.
-            // This can only happen if the user provides an invalid elem_id,
-            // which should be caught in a future validation pass.
             return;
         };
 
         let scale   = self.series.factor_at(pseudo_time) * alpha;
-        let f_enq   = elem.equivalent_nodal_forces(&self.params);
+        let n_local = elem.n_dof();
+        
+        // 1. Create a buffer perfectly sized for this element
+        let mut f_enq = vec![0.0; n_local];
+        
+        // 2. Compute the equivalent forces directly into the buffer!
+        elem.equivalent_nodal_forces(&self.params, &mut f_enq);
+        
         let dof_map = elem.dof_map();
 
+        // 3. Scatter into the global external force vector
         for (local_i, &global_dof) in dof_map.as_usize_slice().iter().enumerate() {
             if global_dof < f_ext.len() {
                 f_ext[global_dof] += f_enq[local_i] * scale;
