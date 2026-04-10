@@ -152,6 +152,9 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     ///
     /// The permutation is cached and reused by `factorize` and `solve`.
     /// Calling `analyze` again invalidates any previous factorization.
+    ///
+    /// # Errors
+    /// - [`SolverError::Sparse`] (via generic error mapping) if matrix permutation or format conversion fails.
     fn analyze(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
         let perm   = self.ordering.clone().into_permutation(k);
         let k_perm = perm.permute_sym(k)?;
@@ -168,6 +171,10 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     ///
     /// Re-permutes `K` using the stored permutation and refactorizes. The
     /// symbolic pattern from `analyze` is reused — no pattern work is repeated.
+    ///
+    /// # Errors
+    /// - [`SolverError::NotAnalyzed`] if `analyze` has not been called.
+    /// - [`SolverError::NotPositiveDefinite`] if the matrix is found to not be strictly positive definite.
     fn factorize(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotAnalyzed)?;
         let sym = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
@@ -183,6 +190,10 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     ///
     /// Applies the permutation, performs forward/backward substitution, and
     /// unpermutes. Both `f` and `u` are in the original (unpermuted) DOF order.
+    ///
+    /// # Errors
+    /// - [`SolverError::NotFactorized`] if `factorize` has not been called.
+    /// - [`SolverError::RhsSizeMismatch`] if vector lengths are inconsistent with matrix dimensions.
     fn solve(&mut self, f: &[T], u: &mut [T]) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotFactorized)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;

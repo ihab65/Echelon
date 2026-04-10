@@ -63,9 +63,8 @@ impl<T: SparseScalar> CoordTransf2d<T> {
 
     /// Compute from node coordinates.
     ///
-    /// # Panics
-    /// Panics in debug mode if the element has zero length
-    /// (nodes are coincident).  In release mode the result is NaN.
+    /// # Errors
+    /// - [`CoreError::DegenerateGeometry`] if the element has length zero (nodes are coincident).
     pub fn from_nodes(x1: T, y1: T, x2: T, y2: T) -> Result<Self> {
         let dx = x2 - x1;
         let dy = y2 - y1;
@@ -92,6 +91,9 @@ impl<T: SparseScalar> CoordTransf2d<T> {
     ///
     /// Useful in tests or when the geometric properties are already computed.
     /// The caller is responsible for ensuring `cos² + sin² ≈ 1`.
+    ///
+    /// # Errors
+    /// - [`CoreError::NonOrthogonalTransform`] if `cos² + sin²` deviates from 1.0 by more than `1e-12`.
     pub fn from_cos_sin_length(cos: T, sin: T, length: T) -> Result<Self> {
         let norm_sq = cos * cos + sin * sin;
         let deviation = (norm_sq - T::one()).abs();

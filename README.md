@@ -107,25 +107,53 @@ Everything needed for FEM assembly is implemented:
 - Optional `rayon` parallel feature
 - Comprehensive test suite with integration tests
 
-### ✅ `solvers` — Ordering Complete, Cholesky In Progress
+### ✅ `solvers` — Ordering, Cholesky, and LDLT Complete
 
 RCM (Reverse Cuthill-McKee) fill-reduction ordering is fully implemented:
 - `Graph` — adjacency structure from `SymCsrMatrix`, O(nnz) two-pass construction
 - `Permutation` — validated newtype with `permute_sym` for symmetric matrix reordering
 - `rcm()` — full algorithm with pseudo-peripheral node detection and degree-ordered BFS
 
-`SparseSolver` interface (three-phase: `analyze` → `factorize` → `solve`) is defined.
-Symbolic and numeric Cholesky are the next implementation targets.
+`SparseSolver` interface (three-phase: `analyze` → `factorize` → `solve`) is implemented.
+Included are both symmetric positive-definite (Cholesky) and symmetric indefinite (LDLᵀ) direct solvers.
+
+### ✅ `fem-core` — Complete
+
+Foundation types for the finite element domain:
+- Node and element ID newtypes.
+- Small dense vector/matrix math.
+- 2D `CoordTransf2d` and `DofMap` implementations.
+
+### ✅ `materials` — Complete
+
+Architecture supporting smooth autodiff-friendly materials and history-dependent materials.
+Includes reference implementations like `ElasticUniaxial`.
+
+### ✅ `elements` — Complete
+
+Implementation of finite elements:
+- `Truss2d` (linear, energy-based implementation)
+- `ElasticBeam2d` (frame element, linear elastic)
+
+### ✅ `assembly` — Complete
+
+The core system for holding models and assembling sparse matrices.
+- `Model` structure for managing nodes, elements, and DOFs.
+- Connectivity and topology graph generation to determine matrix non-zero patterns.
+- Stiffness, mass, and damping matrix assembly.
+- Global load combination and external force application.
+
+### ✅ `analysis` (solver) — Complete
+Core algorithmic routines for solving structural equilibrium:
+- Linear equation solving.
+- Nonlinear `Newton-Raphson` and `ModifiedNewton` solution algorithms.
+- Integrators for `StaticNonlinear` (e.g. `LoadControl`, `DispControl`).
+- Integrators for `Transient` dynamics (e.g. `Newmark`, `HHT`).
 
 ### 🔄 In Progress / Planned
 
 | Crate | Status |
 |---|---|
-| `core` | Not started — index newtypes, small dense matrices, 2D transforms |
-| `materials` | Not started — `ElasticUniaxial`, `Steel01`, `Concrete01` |
-| `elements` | Not started — `Truss2d`, `ElasticBeam2d` |
-| `assembly` | Not started — DOF numbering, assembly loop, BC application, load patterns |
-| `solver` (analysis) | Not started — Newton-Raphson loop, Newmark integration |
 | `echelon` (Python) | Not started — PyO3 bindings, population runner |
 
 ---
@@ -282,22 +310,23 @@ Echelon/
 - [x] Symbolic Cholesky (elimination tree + L pattern)
 - [x] Numeric Cholesky (left-looking, dense column workspace)
 - [x] Triangular solve (with permutation)
-- [x] `core` crate (index newtypes, transforms)
-- [ ] `materials`: `ElasticUniaxial`
-- [ ] `elements`: `Truss2d`, `ElasticBeam2d`
-- [ ] `assembly`: DOF numbering, stiffness assembly, BC application
-- [ ] Portal frame integration test (compare with analytical solution)
+- [x] `fem-core` crate (index newtypes, transforms)
+- [x] `materials`: `ElasticUniaxial`
+- [x] `elements`: `Truss2d`, `ElasticBeam2d`
+- [x] `assembly`: DOF numbering, stiffness assembly, BC application
+- [x] Portal frame integration test (compare with analytical solution)
 
 ### Phase 2 — Nonlinear Static Analysis
-- [ ] Newton-Raphson loop in `solver`
+- [x] Newton-Raphson loop in `analysis`
 - [ ] `Steel01`, `Concrete01` material models
-- [ ] Load patterns with time series
-- [ ] RC frame pushover analysis (verified against OpenSees)
+- [x] Load patterns with combinations
+- [x] RC frame pushover analysis (verified against OpenSees via `analysis_integration` tests)
 
 ### Phase 3 — Dynamic Analysis
-- [ ] Consistent and lumped mass matrices
-- [ ] Newmark integration
-- [ ] Nonlinear time history analysis
+- [x] Consistent and lumped mass matrices
+- [x] Newmark integration
+- [x] HHT integration
+- [x] Nonlinear time history analysis drivers
 - [ ] Ground motion input (`PathSeries`)
 
 ### Phase 4 — Python API and Population Runner

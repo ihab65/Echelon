@@ -87,6 +87,9 @@ pub trait Integrator: Send + Sync {
     /// (the default no-op is correct for them). Transient integrators
     /// (Newmark, HHT) add `a0 * M` and `a1 * C` so the solver factors the
     /// true effective stiffness `K_eff = K_T + a0*M + a1*C`.
+    ///
+    /// # Errors
+    /// Returns an error if matrix augmentation fails (e.g. out of bounds).
     fn form_tangent(&self, system: &mut GlobalSystem) -> Result<()> {
         let _ = system; // static integrators are a no-op
         Ok(())

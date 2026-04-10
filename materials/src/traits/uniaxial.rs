@@ -69,11 +69,9 @@ pub trait UniaxialMaterial: Send + Sync {
     /// # Arguments
     /// * `strain` — the converged trial strain
     /// 
-    /// /// Returns the committed stress on success. Returns
-    /// [`MaterialError::StrainDomainViolation`] if `strain` falls outside
-    /// the valid domain of this constitutive model — for example, beyond
-    /// the crushing strain of a concrete model or the fracture strain of
-    /// a steel model.
+    /// # Errors
+    /// - [`MaterialError::StrainDomainViolation`] if `strain` falls outside
+    ///   the valid domain of this constitutive model.
     ///
     /// For `ElasticUniaxial`, this never returns `Err` because linear
     /// elastic has an unbounded strain domain.

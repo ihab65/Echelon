@@ -139,6 +139,10 @@ impl AnalysisDriver for TransientDriver {
     /// dynamic equilibrium, and commits the state. Soft failures
     /// (non-convergence) return `Ok(false)` with the model left at the
     /// last committed state.
+    ///
+    /// # Errors
+    /// - [`AnalysisError::InvalidConfiguration`] if system buffers are inconsistently sized.
+    /// - [`AnalysisError::SolverError`] if matrix factorization fails.
     fn analyze(&mut self, model: &mut Model, steps: usize) -> Result<bool> {
         self.system.check_dof_consistency(model)?;
 

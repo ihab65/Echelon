@@ -103,6 +103,9 @@ impl SymbolicCholesky {
 /// The returned [`SymbolicCholesky`] should be cached and reused for
 /// every subsequent call to [`super::numeric::factorize`] as long as
 /// the topology (non-zero pattern) of `K` does not change.
+///
+/// # Errors
+/// Currently infallible, but returns `Result` for API consistency and future bounds checking.
 pub fn analyze<T>(k_csc: &CscMatrix<T>) -> Result<SymbolicCholesky> 
     where T: SparseScalar
 {

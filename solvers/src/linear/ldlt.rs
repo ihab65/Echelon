@@ -304,6 +304,9 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
     /// symbolic Cholesky to obtain the elimination tree and fill pattern.
     /// The result is reused across all subsequent `factorize` calls as long
     /// as the non-zero pattern of `K` is unchanged.
+    ///
+    /// # Errors
+    /// - [`SolverError::Sparse`] if permutation fails.
     fn analyze(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
         let perm   = self.ordering.clone().into_permutation(k);
         let k_perm = perm.permute_sym(k)?;

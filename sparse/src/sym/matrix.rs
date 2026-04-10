@@ -331,6 +331,13 @@ impl<T: SparseScalar> SymCsrMatrix<T> {
 
 impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Verify all internal invariants.
+    ///
+    /// # Errors
+    /// - [`SparseError::PatternLengthMismatch`] if the row pointer array length is invalid.
+    /// - [`SparseError::DimensionMismatch`] if the values array does not match the column indices.
+    /// - [`SparseError::ColOutOfRange`] if any column index exceeds the matrix dimensions.
+    /// - [`SparseError::LowerTriangleEntry`] if lower triangle entries are found.
+    /// - [`SparseError::IndexOutOfBounds`] if the diagonal is missing or column indices are not strictly increasing.
     pub fn validate(&self) -> Result<()> {
         if self.row_ptr.len() != self.n + 1 {
             return Err(SparseError::PatternLengthMismatch {
@@ -384,6 +391,12 @@ impl<T: SparseScalar> SymCsrMatrix<T> {
             .map(|local| start + local)
     }
 
+    /// Verify a given `(row, col)` coordinate is within dimensions and in the upper triangle.
+    ///
+    /// # Errors
+    /// - [`SparseError::RowOutOfRange`] if `row >= nrows`.
+    /// - [`SparseError::ColOutOfRange`] if `col >= ncols`.
+    /// - [`SparseError::LowerTriangleEntry`] if `col < row`.
     #[inline]
     fn check_upper(&self, row: usize, col: usize) -> Result<()> {
         if row >= self.n {
@@ -428,6 +441,9 @@ impl<T: SparseScalar> fmt::Display for SymCsrMatrix<T> {
 impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Exports the symmetric matrix to a Matrix Market (.mtx) file.
     /// Only the stored upper triangle is written, with the 'symmetric' header.
+    ///
+    /// # Errors
+    /// Returns a generic IO error dynamically wrapped in an `IoError` if writing to the file fails.
     pub fn to_mtx<P: AsRef<std::path::Path>>(&self, path: P) -> crate::error::Result<()> {
         use std::fs::File;
         use std::io::{BufWriter, Write};

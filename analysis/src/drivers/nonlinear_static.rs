@@ -191,7 +191,10 @@ impl AnalysisDriver for StaticNonlinear {
     /// # Returns
     /// - `Ok(true)` — all `steps` converged.
     /// - `Ok(false)` — at least one step failed to converge (soft failure).
-    /// - `Err(e)` — an unrecoverable error (assembly or solver fault).
+    ///
+    /// # Errors
+    /// - [`AnalysisError::InvalidConfiguration`] if system buffers are inconsistently sized.
+    /// - [`AnalysisError::SolverError`] if matrix factorization fails.
     fn analyze(&mut self, model: &mut Model, steps: usize) -> Result<bool> {
         self.system.check_dof_consistency(model)?;
 
