@@ -33,14 +33,51 @@
 //! | `Ordering::Natural` | Already-optimal orderings; debugging |
 //! | `Ordering::Custom(p)` | Pre-computed permutation from an external tool |
 
-use sparse::{SparseScalar, SymCsrMatrix};
-use sparse::convert::sym_to_csc;
+use sparse::{ConvertWorkspace, SparseScalar, SymCsrMatrix};
+use sparse::convert::{sym_to_csc, sym_to_csc_into};
 
 use crate::cholesky::{symbolic, numeric};
+use crate::cholesky::numeric::CholeskyWorkspace;
 use crate::cholesky::solve as chol_solve;
 use crate::error::{Result, SolverError};
 use crate::linear::LinearSolver;
 use crate::ordering::{Ordering, Permutation};
+
+// -----------------------------------------------------------------
+// Pre-allocated workspace
+// -----------------------------------------------------------------
+
+/// Cached buffers for the numeric factorization and solve phases.
+///
+/// Allocated once in `analyze()` and reused across all `factorize()`
+/// and `solve()` calls, eliminating per-iteration heap allocations.
+struct CholWorkspace<T: SparseScalar> {
+    /// Workspace for the left-looking column Cholesky (w, active, touched, stack).
+    chol_ws: CholeskyWorkspace<T>,
+    /// Scratch buffer for the unpermute step in `solve()`.
+    x_perm: Vec<T>,
+    /// Persistent CSC column pointers for the permuted matrix.
+    csc_col_ptr: Vec<usize>,
+    /// Persistent CSC row indices for the permuted matrix.
+    csc_row_idx: Vec<usize>,
+    /// Persistent CSC values for the permuted matrix.
+    csc_values: Vec<T>,
+    /// Workspace for `sym_to_csc_into` (col_count, cursor, pairs).
+    convert_ws: ConvertWorkspace<T>,
+}
+
+impl<T: SparseScalar> CholWorkspace<T> {
+    fn new(n: usize) -> Self {
+        Self {
+            chol_ws: CholeskyWorkspace::new(n),
+            x_perm: vec![T::zero(); n],
+            csc_col_ptr: vec![0; n + 1],
+            csc_row_idx: Vec::new(),
+            csc_values: Vec::new(),
+            convert_ws: ConvertWorkspace::new(n),
+        }
+    }
+}
 
 // -----------------------------------------------------------------
 // CholeskySolver
@@ -52,6 +89,12 @@ use crate::ordering::{Ordering, Permutation};
 /// The fill-reduction ordering strategy is configured on the struct before the
 /// first `analyze` call and does not change the trait interface.
 ///
+/// # Zero-allocation factorize/solve
+///
+/// After the initial `analyze()` call, all subsequent `factorize()` and
+/// `solve()` calls reuse pre-allocated workspace buffers. The only remaining
+/// per-call allocation is `permute_sym()` (deferred to a future refactor).
+///
 /// # Default ordering
 ///
 /// `CholeskySolver::new()` uses [`Ordering::Amd`] by default. AMD consistently
@@ -62,8 +105,17 @@ pub struct CholeskySolver<T: SparseScalar> {
     ordering: Ordering,
     /// Computed permutation — reused by `factorize` and `solve`.
     perm:     Option<Permutation>,
+    /// Cached symbolic phase (elimination tree + fill pattern + children).
     pub symbolic: Option<symbolic::SymbolicCholesky>,
+    /// Pre-allocated numeric factor (values overwritten each `factorize`).
     numeric:  Option<numeric::NumericCholesky<T>>,
+    /// Pre-allocated workspace buffers for factorize and solve.
+    workspace: Option<CholWorkspace<T>>,
+    /// Whether `factorize` has been called since the last `analyze`.
+    ///
+    /// The `numeric` buffer is pre-allocated in `analyze()` but only
+    /// contains valid factor values after `factorize()` succeeds.
+    factorized: bool,
 }
 
 impl<T: SparseScalar> CholeskySolver<T> {
@@ -78,6 +130,8 @@ impl<T: SparseScalar> CholeskySolver<T> {
             perm:     None,
             symbolic: None,
             numeric:  None,
+            workspace: None,
+            factorized: false,
         }
     }
 
@@ -88,9 +142,7 @@ impl<T: SparseScalar> CholeskySolver<T> {
     pub fn with_rcm() -> Self {
         Self {
             ordering: Ordering::Rcm,
-            perm:     None,
-            symbolic: None,
-            numeric:  None,
+            ..Self::new()
         }
     }
 
@@ -115,9 +167,11 @@ impl<T: SparseScalar> CholeskySolver<T> {
     pub fn set_ordering(&mut self, ordering: Ordering) {
         self.ordering = ordering;
         // Invalidate any existing analysis — the ordering change makes it stale.
-        self.perm     = None;
-        self.symbolic = None;
-        self.numeric  = None;
+        self.perm      = None;
+        self.symbolic  = None;
+        self.numeric   = None;
+        self.workspace = None;
+        self.factorized = false;
     }
 
     /// Return a reference to the current ordering strategy.
@@ -135,7 +189,7 @@ impl<T: SparseScalar> CholeskySolver<T> {
     /// Return `true` if `factorize` has been called since the last `analyze`.
     #[inline]
     pub fn is_factorized(&self) -> bool {
-        self.numeric.is_some()
+        self.factorized
     }
 }
 
@@ -149,6 +203,7 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     /// 1. Computes a permutation from the configured [`Ordering`] strategy.
     /// 2. Permutes `K` and converts to full CSC format.
     /// 3. Runs symbolic Cholesky to obtain the pattern of `L`.
+    /// 4. Pre-allocates the numeric factor and all workspace buffers.
     ///
     /// The permutation is cached and reused by `factorize` and `solve`.
     /// Calling `analyze` again invalidates any previous factorization.
@@ -161,9 +216,15 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
         let k_csc  = sym_to_csc(&k_perm);
         let sym    = symbolic::analyze(&k_csc)?;
 
+        // Pre-allocate numeric factors and workspaces based on the pattern
+        let n   = sym.n;
+        let nnz = sym.nnz_l();
+        self.numeric    = Some(numeric::NumericCholesky::new(n, nnz));
+        self.workspace  = Some(CholWorkspace::new(n));
+        self.factorized = false;
+
         self.perm     = Some(perm);
         self.symbolic = Some(sym);
-        self.numeric  = None; // invalidate previous factorization
         Ok(())
     }
 
@@ -171,18 +232,36 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     ///
     /// Re-permutes `K` using the stored permutation and refactorizes. The
     /// symbolic pattern from `analyze` is reused — no pattern work is repeated.
+    /// CSC conversion and numeric factorization use pre-allocated workspace
+    /// buffers, avoiding per-iteration heap allocations.
     ///
     /// # Errors
     /// - [`SolverError::NotAnalyzed`] if `analyze` has not been called.
     /// - [`SolverError::NotPositiveDefinite`] if the matrix is found to not be strictly positive definite.
     fn factorize(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotAnalyzed)?;
-        let sym = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
+        let sym  = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
+        let num  = self.numeric.as_mut().ok_or(SolverError::NotAnalyzed)?;
+        let ws   = self.workspace.as_mut().ok_or(SolverError::NotAnalyzed)?;
 
+        // TODO: Replace with perm.permute_sym_into() to eliminate BTreeMap allocation
         let k_perm = perm.permute_sym(k)?;
-        let k_csc  = sym_to_csc(&k_perm);
 
-        self.numeric = Some(numeric::factorize(&k_csc, sym)?);
+        // Zero-allocation CSC conversion using cached buffers
+        sym_to_csc_into(
+            &k_perm,
+            &mut ws.csc_col_ptr,
+            &mut ws.csc_row_idx,
+            &mut ws.csc_values,
+            &mut ws.convert_ws,
+        );
+
+        // Zero-allocation numeric factorization using cached workspace
+        numeric::factorize_into(
+            sym, num, &mut ws.chol_ws,
+            &ws.csc_col_ptr, &ws.csc_row_idx, &ws.csc_values,
+        )?;
+        self.factorized = true;
         Ok(())
     }
 
@@ -190,15 +269,21 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     ///
     /// Applies the permutation, performs forward/backward substitution, and
     /// unpermutes. Both `f` and `u` are in the original (unpermuted) DOF order.
+    /// Uses a pre-allocated scratch buffer for the unpermute step.
     ///
     /// # Errors
     /// - [`SolverError::NotFactorized`] if `factorize` has not been called.
     /// - [`SolverError::RhsSizeMismatch`] if vector lengths are inconsistent with matrix dimensions.
     fn solve(&mut self, f: &[T], u: &mut [T]) -> Result<()> {
+        if !self.factorized {
+            return Err(SolverError::NotFactorized);
+        }
         let perm = self.perm.as_ref().ok_or(SolverError::NotFactorized)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;
         let num  = self.numeric.as_ref().ok_or(SolverError::NotFactorized)?;
-        chol_solve::solve(sym, num, perm, f, u)
+        let ws   = self.workspace.as_mut().ok_or(SolverError::NotFactorized)?;
+
+        chol_solve::solve_with_buffer(sym, num, perm, f, u, &mut ws.x_perm)
     }
 }
 

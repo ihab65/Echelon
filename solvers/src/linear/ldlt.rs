@@ -202,6 +202,11 @@ pub struct LdltSolver<T: SparseScalar> {
     numeric:  Option<NumericLdlt<T>>,
     /// Pre-allocated workspaces for numeric factorization and solve phases.
     workspace: Option<LdltWorkspace<T>>,
+    /// Whether `factorize` has been called since the last `analyze`.
+    ///
+    /// The `numeric` buffer is pre-allocated in `analyze()` but only
+    /// contains valid factor values after `factorize()` succeeds.
+    factorized: bool,
 }
 
 impl<T: SparseScalar> LdltSolver<T> {
@@ -217,6 +222,7 @@ impl<T: SparseScalar> LdltSolver<T> {
             symbolic: None,
             numeric:  None,
             workspace: None,
+            factorized: false,
         }
     }
 
@@ -243,6 +249,8 @@ impl<T: SparseScalar> LdltSolver<T> {
         self.perm     = None;
         self.symbolic = None;
         self.numeric  = None;
+        self.workspace = None;
+        self.factorized = false;
     }
 
     /// Return the current ordering strategy.
@@ -260,7 +268,7 @@ impl<T: SparseScalar> LdltSolver<T> {
     /// Return `true` if `factorize` has been called since the last `analyze`.
     #[inline]
     pub fn is_factorized(&self) -> bool {
-        self.numeric.is_some()
+        self.factorized
     }
 
     /// Number of negative diagonal pivots in the last factorization.
@@ -276,6 +284,7 @@ impl<T: SparseScalar> LdltSolver<T> {
     /// - `negative_pivots() > 0`  → `K` is indefinite (structure has passed
     ///   one or more limit / bifurcation points).
     pub fn negative_pivots(&self) -> Option<usize> {
+        if !self.factorized { return None; }
         self.numeric.as_ref().map(|num| {
             num.d_values
                 .iter()
@@ -289,6 +298,7 @@ impl<T: SparseScalar> LdltSolver<T> {
     ///
     /// Returns `None` if `factorize` has not been called.
     pub fn pivots(&self) -> Option<&[T]> {
+        if !self.factorized { return None; }
         self.numeric.as_ref().map(|num| num.d_values.as_slice())
     }
 }
@@ -318,6 +328,7 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
         let nnz = sym.nnz_l();
         self.numeric   = Some(NumericLdlt::new(n, nnz));
         self.workspace = Some(LdltWorkspace::new(n));
+        self.factorized = false;
 
         self.perm     = Some(perm);
         self.symbolic = Some(sym);
@@ -352,6 +363,7 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
         );
 
         ldlt_factorize(sym, num, ws)?;
+        self.factorized = true;
         Ok(())
     }
 
@@ -364,6 +376,9 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
     /// - [`SolverError::NotFactorized`] if `factorize` has not been called.
     /// - [`SolverError::RhsSizeMismatch`] if vector lengths are inconsistent.
     fn solve(&mut self, f: &[T], u: &mut [T]) -> Result<()> {
+        if !self.factorized {
+            return Err(SolverError::NotFactorized);
+        }
         let perm = self.perm.as_ref().ok_or(SolverError::NotFactorized)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;
         let num  = self.numeric.as_ref().ok_or(SolverError::NotFactorized)?;

@@ -53,6 +53,46 @@ pub struct NumericCholesky<T: SparseScalar> {
     pub n: usize,
 }
 
+impl<T: SparseScalar> NumericCholesky<T> {
+    /// Pre-allocate a numeric factor with the given dimension and non-zero count.
+    ///
+    /// All values are initialised to zero; they will be overwritten by
+    /// [`factorize`] or [`factorize_into`].
+    pub fn new(n: usize, nnz: usize) -> Self {
+        Self {
+            values: vec![T::zero(); nnz],
+            n,
+        }
+    }
+}
+
+/// Pre-allocated workspace for the numeric Cholesky factorization.
+///
+/// All buffers are allocated once (during `analyze`) and reused across
+/// every `factorize` call, eliminating per-iteration heap allocations.
+pub struct CholeskyWorkspace<T: SparseScalar> {
+    /// Dense accumulator for the current column of L.
+    pub w: Vec<T>,
+    /// Tracks which entries of `w` have been written this column.
+    pub active: Vec<bool>,
+    /// Indices of entries touched in `w` this column (for O(touched) cleanup).
+    pub touched: Vec<usize>,
+    /// DFS stack for the left-looking update (reused across columns).
+    pub stack: Vec<usize>,
+}
+
+impl<T: SparseScalar> CholeskyWorkspace<T> {
+    /// Allocate a workspace for a system of dimension `n`.
+    pub fn new(n: usize) -> Self {
+        Self {
+            w: vec![T::zero(); n],
+            active: vec![false; n],
+            touched: Vec::with_capacity(n),
+            stack: Vec::with_capacity(n),
+        }
+    }
+}
+
 // -----------------------------------------------------------------
 // Factorization
 // -----------------------------------------------------------------
@@ -202,6 +242,140 @@ pub fn factorize<T>(k_csc: &CscMatrix<T>, sym: &SymbolicCholesky) -> Result<Nume
     }
 
     Ok(NumericCholesky { values: lv, n })
+}
+
+// -----------------------------------------------------------------
+// Zero-allocation factorization
+// -----------------------------------------------------------------
+
+/// Compute the numeric Cholesky factorization into pre-allocated buffers.
+///
+/// This is the zero-allocation counterpart of [`factorize`]. All workspace
+/// vectors are provided by the caller (cached on the solver struct) and
+/// reused across Newton iterations. The `children` list is read from the
+/// cached [`SymbolicCholesky`] rather than being rebuilt each call.
+///
+/// The CSC input matrix is read from the workspace arrays `csc_col_ptr`,
+/// `csc_row_idx`, `csc_values` which were filled by `sym_to_csc_into`.
+///
+/// # Arguments
+/// * `sym`  — the symbolic factor (pattern of L, cached children).
+/// * `num`  — the pre-allocated numeric factor (values overwritten in-place).
+/// * `ws`   — the pre-allocated workspace (w, active, touched, stack).
+/// * `csc_col_ptr` — column pointers of the permuted full CSC matrix.
+/// * `csc_row_idx` — row indices of the permuted full CSC matrix.
+/// * `csc_values`  — values of the permuted full CSC matrix.
+///
+/// # Errors
+/// - [`SolverError::NotPositiveDefinite`] if the matrix is not SPD.
+pub fn factorize_into<T>(
+    sym:         &SymbolicCholesky,
+    num:         &mut NumericCholesky<T>,
+    ws:          &mut CholeskyWorkspace<T>,
+    csc_col_ptr: &[usize],
+    csc_row_idx: &[usize],
+    csc_values:  &[T],
+) -> Result<()>
+where
+    T: SparseScalar,
+{
+    let n = sym.n;
+
+    // Clear numeric values
+    num.values.fill(T::zero());
+
+    for j in 0..n {
+        ws.touched.clear();
+
+        // ------------------------------------------------------------------
+        // Step 1 — scatter column j of K (lower triangle: row >= j) into w.
+        // ------------------------------------------------------------------
+        let k_start = csc_col_ptr[j];
+        let k_end   = csc_col_ptr[j + 1];
+
+        for idx in k_start..k_end {
+            let row = csc_row_idx[idx];
+            if row >= j {
+                ws.w[row] = csc_values[idx];
+                if !ws.active[row] {
+                    ws.active[row] = true;
+                    ws.touched.push(row);
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Step 2 — left-looking update using CACHED children.
+        // ------------------------------------------------------------------
+        ws.stack.clear();
+        for &c in &sym.children[j] {
+            ws.stack.push(c);
+        }
+
+        while let Some(c) = ws.stack.pop() {
+            let col_start = sym.col_ptr[c];
+            let col_end   = sym.col_ptr[c + 1];
+            let col_rows  = &sym.row_idx[col_start..col_end];
+
+            let local_j = match col_rows.binary_search(&j) {
+                Ok(pos) => pos,
+                Err(_)  => continue,
+            };
+            let ljc = num.values[col_start + local_j];
+
+            for pos in local_j..col_rows.len() {
+                let row = col_rows[pos];
+                ws.w[row] -= num.values[col_start + pos] * ljc;
+                if !ws.active[row] {
+                    ws.active[row] = true;
+                    ws.touched.push(row);
+                }
+            }
+
+            for &gc in &sym.children[c] {
+                ws.stack.push(gc);
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Step 3 — diagonal: L[j,j] = sqrt(w[j]).
+        // ------------------------------------------------------------------
+        let wj = ws.w[j];
+        if wj.real_part() <= 1e-12 {
+            for &r in &ws.touched {
+                ws.w[r] = T::zero();
+                ws.active[r] = false;
+            }
+            return Err(SolverError::NotPositiveDefinite { index: j, value: wj.real_part() });
+        }
+        let ljj = wj.scalar_sqrt();
+
+        let l_col_start = sym.col_ptr[j];
+        let l_col_end   = sym.col_ptr[j + 1];
+        debug_assert_eq!(
+            sym.row_idx[l_col_start], j,
+            "diagonal must be the first entry in L column {j}"
+        );
+        num.values[l_col_start] = ljj;
+
+        // ------------------------------------------------------------------
+        // Step 4 — sub-diagonal: L[i,j] = w[i] / L[j,j].
+        // ------------------------------------------------------------------
+        for pos in (l_col_start + 1)..l_col_end {
+            let row = sym.row_idx[pos];
+            num.values[pos] = ws.w[row] / ljj;
+        }
+
+        // ------------------------------------------------------------------
+        // Step 5 — clear workspace.
+        // ------------------------------------------------------------------
+        for &r in &ws.touched {
+            ws.w[r] = T::zero();
+            ws.active[r] = false;
+        }
+    }
+
+    Ok(())
 }
 
 // -----------------------------------------------------------------
