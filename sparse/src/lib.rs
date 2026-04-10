@@ -43,6 +43,7 @@ pub use csr::CsrMatrix;
 pub use sym::SymCsrMatrix;
 pub use csc::CscMatrix;
 pub use csr::ops::MatvecWorkspace;
+pub use convert::ConvertWorkspace;
 
 use std::fmt::{Debug, Display};
 // -----------------------------------------------------------------

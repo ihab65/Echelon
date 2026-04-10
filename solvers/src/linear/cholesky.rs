@@ -183,7 +183,7 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     ///
     /// Applies the permutation, performs forward/backward substitution, and
     /// unpermutes. Both `f` and `u` are in the original (unpermuted) DOF order.
-    fn solve(&self, f: &[T], u: &mut [T]) -> Result<()> {
+    fn solve(&mut self, f: &[T], u: &mut [T]) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotFactorized)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;
         let num  = self.numeric.as_ref().ok_or(SolverError::NotFactorized)?;

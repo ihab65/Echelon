@@ -84,7 +84,7 @@ pub trait LinearSolver<T: SparseScalar> {
     /// # Errors
     /// - [`SolverError::NotFactorized`] if `factorize` has not been called.
     /// - [`SolverError::RhsSizeMismatch`] if vector lengths are inconsistent.
-    fn solve(&self, f: &[T], u: &mut [T]) -> Result<()>;
+    fn solve(&mut self, f: &[T], u: &mut [T]) -> Result<()>;
 
     /// Convenience: `analyze` then `factorize` in one call.
     ///

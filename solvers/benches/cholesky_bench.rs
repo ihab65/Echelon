@@ -63,7 +63,7 @@ impl ReadySolver {
         solver.analyze_and_factorize(k).unwrap();
         Self { solver, n: k.n }
     }
-    fn solve(&self, f: &[f64]) -> Vec<f64> {
+    fn solve(&mut self, f: &[f64]) -> Vec<f64> {
         let mut u = vec![0.0_f64; self.n];
         self.solver.solve(f, &mut u).unwrap();
         u
@@ -171,7 +171,7 @@ fn bench_solve_tridiagonal(c: &mut Criterion) {
     for &n in &[100_usize, 500, 1000, 5000] {
         let k = spring_chain(n);
         let f = rhs(n);
-        let rs = ReadySolver::new(&k);
+        let mut rs = ReadySolver::new(&k);
 
         group.bench_with_input(BenchmarkId::from_parameter(n), &f, |b, f| {
             b.iter(|| rs.solve(black_box(f)));
@@ -188,7 +188,7 @@ fn bench_solve_grid(c: &mut Criterion) {
         let k   = laplacian_2d(nx, ny);
         let n   = k.n;
         let f   = rhs(n);
-        let rs  = ReadySolver::new(&k);
+        let mut rs  = ReadySolver::new(&k);
         let id  = BenchmarkId::new(format!("{nx}x{ny}"), n);
 
         group.bench_with_input(id, &f, |b, f| {
@@ -282,7 +282,7 @@ fn bench_faer_dense_vs_sparse(c: &mut Criterion) {
         // ── Our sparse solver ───────────────────────────────────────────────
         {
             let id = BenchmarkId::new("echelon-sparse", n);
-            let rs = ReadySolver::new(&k_sparse);  // pre-analyzed outside loop
+            let mut rs = ReadySolver::new(&k_sparse);  // pre-analyzed outside loop
 
             group.bench_with_input(id, &f, |b, f| {
                 b.iter(|| rs.solve(black_box(f)));
