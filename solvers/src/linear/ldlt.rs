@@ -87,6 +87,10 @@ struct LdltWorkspace<T: SparseScalar> {
     touched: Vec<usize>,
     stack: Vec<usize>,
     x_perm: Vec<T>, // For the unpermute step in solve()
+    
+    // Cached mapping for permute_sym_into
+    k_perm_map: Vec<usize>,
+    k_perm: SymCsrMatrix<T>,
 
     // Arrays to hold the converted CSC matrix
     csc_col_ptr: Vec<usize>,
@@ -98,16 +102,18 @@ struct LdltWorkspace<T: SparseScalar> {
 }
 
 impl<T: SparseScalar> LdltWorkspace<T> {
-    fn new(n: usize) -> Self {
+    fn new(n: usize, k_perm: SymCsrMatrix<T>, k_perm_map: Vec<usize>) -> Self {
         Self {
             w: vec![T::zero(); n],
             active: vec![false; n],
             touched: Vec::with_capacity(n),
             stack: Vec::with_capacity(n),
             x_perm: vec![T::zero(); n],
+            k_perm_map,
+            k_perm,
             csc_col_ptr: vec![0; n + 1],
-            csc_row_idx: vec![0; 0], // Will be resized in analyze
-            csc_values: vec![T::zero(); 0], // Will be resized in analyze
+            csc_row_idx: vec![0; 0], // Will be resized
+            csc_values: vec![T::zero(); 0], // Will be resized
             convert_ws: ConvertWorkspace::new(n),
         }
     }
@@ -318,16 +324,16 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
     /// # Errors
     /// - [`SolverError::Sparse`] if permutation fails.
     fn analyze(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
-        let perm   = self.ordering.clone().into_permutation(k);
-        let k_perm = perm.permute_sym(k)?;
-        let k_csc  = sym_to_csc(&k_perm);
-        let sym    = symbolic::analyze(&k_csc)?;
+        let perm = self.ordering.clone().into_permutation(k);
+        let (k_perm, k_perm_map) = perm.permute_sym_with_map(k)?;
+        let k_csc = sym_to_csc(&k_perm);
+        let sym   = symbolic::analyze(&k_csc)?;
 
         // Pre-allocate numeric factors and workspaces based on the pattern
         let n = sym.n;
         let nnz = sym.nnz_l();
         self.numeric   = Some(NumericLdlt::new(n, nnz));
-        self.workspace = Some(LdltWorkspace::new(n));
+        self.workspace = Some(LdltWorkspace::new(n, k_perm, k_perm_map));
         self.factorized = false;
 
         self.perm     = Some(perm);
@@ -351,11 +357,11 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
         let num  = self.numeric.as_mut().ok_or(SolverError::NotAnalyzed)?;
         let ws   = self.workspace.as_mut().ok_or(SolverError::NotAnalyzed)?;
 
-        // TODO: Next refactor is perm.permute_sym_into(k, &mut ws.k_perm)
-        let k_perm = perm.permute_sym(k)?; 
+        // Zero-allocation permutation reusing the fixed sparsity pattern
+        perm.permute_sym_into(k, &mut ws.k_perm, &ws.k_perm_map);
         
         sym_to_csc_into(
-            &k_perm, 
+            &ws.k_perm, 
             &mut ws.csc_col_ptr, 
             &mut ws.csc_row_idx, 
             &mut ws.csc_values, 

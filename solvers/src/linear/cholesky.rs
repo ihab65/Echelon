@@ -56,6 +56,10 @@ struct CholWorkspace<T: SparseScalar> {
     chol_ws: CholeskyWorkspace<T>,
     /// Scratch buffer for the unpermute step in `solve()`.
     x_perm: Vec<T>,
+    /// Constant index mapping from original `K` values to `k_perm` values.
+    k_perm_map: Vec<usize>,
+    /// Persistent permuted symmetric matrix `K`.
+    k_perm: SymCsrMatrix<T>,
     /// Persistent CSC column pointers for the permuted matrix.
     csc_col_ptr: Vec<usize>,
     /// Persistent CSC row indices for the permuted matrix.
@@ -67,10 +71,12 @@ struct CholWorkspace<T: SparseScalar> {
 }
 
 impl<T: SparseScalar> CholWorkspace<T> {
-    fn new(n: usize) -> Self {
+    fn new(n: usize, k_perm: SymCsrMatrix<T>, k_perm_map: Vec<usize>) -> Self {
         Self {
             chol_ws: CholeskyWorkspace::new(n),
             x_perm: vec![T::zero(); n],
+            k_perm_map,
+            k_perm,
             csc_col_ptr: vec![0; n + 1],
             csc_row_idx: Vec::new(),
             csc_values: Vec::new(),
@@ -92,8 +98,9 @@ impl<T: SparseScalar> CholWorkspace<T> {
 /// # Zero-allocation factorize/solve
 ///
 /// After the initial `analyze()` call, all subsequent `factorize()` and
-/// `solve()` calls reuse pre-allocated workspace buffers. The only remaining
-/// per-call allocation is `permute_sym()` (deferred to a future refactor).
+/// `solve()` calls reuse pre-allocated workspace buffers mapping values 
+/// consistently. There are no allocations within the `factorize` and
+/// `solve` hot-loops.
 ///
 /// # Default ordering
 ///
@@ -211,16 +218,16 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
     /// # Errors
     /// - [`SolverError::Sparse`] (via generic error mapping) if matrix permutation or format conversion fails.
     fn analyze(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
-        let perm   = self.ordering.clone().into_permutation(k);
-        let k_perm = perm.permute_sym(k)?;
-        let k_csc  = sym_to_csc(&k_perm);
-        let sym    = symbolic::analyze(&k_csc)?;
+        let perm = self.ordering.clone().into_permutation(k);
+        let (k_perm, k_perm_map) = perm.permute_sym_with_map(k)?;
+        let k_csc = sym_to_csc(&k_perm);
+        let sym   = symbolic::analyze(&k_csc)?;
 
         // Pre-allocate numeric factors and workspaces based on the pattern
         let n   = sym.n;
         let nnz = sym.nnz_l();
         self.numeric    = Some(numeric::NumericCholesky::new(n, nnz));
-        self.workspace  = Some(CholWorkspace::new(n));
+        self.workspace  = Some(CholWorkspace::new(n, k_perm, k_perm_map));
         self.factorized = false;
 
         self.perm     = Some(perm);
@@ -244,12 +251,12 @@ impl<T: SparseScalar> LinearSolver<T> for CholeskySolver<T> {
         let num  = self.numeric.as_mut().ok_or(SolverError::NotAnalyzed)?;
         let ws   = self.workspace.as_mut().ok_or(SolverError::NotAnalyzed)?;
 
-        // TODO: Replace with perm.permute_sym_into() to eliminate BTreeMap allocation
-        let k_perm = perm.permute_sym(k)?;
+        // Zero-allocation permutation reusing the fixed sparsity pattern
+        perm.permute_sym_into(k, &mut ws.k_perm, &ws.k_perm_map);
 
         // Zero-allocation CSC conversion using cached buffers
         sym_to_csc_into(
-            &k_perm,
+            &ws.k_perm,
             &mut ws.csc_col_ptr,
             &mut ws.csc_row_idx,
             &mut ws.csc_values,

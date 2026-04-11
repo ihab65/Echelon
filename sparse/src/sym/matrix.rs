@@ -186,6 +186,10 @@ impl<T: SparseScalar> SymCsrMatrix<T> {
     #[inline]
     pub fn values(&self) -> &[T] { &self.values }
 
+    /// Mutable raw values array.
+    #[inline]
+    pub fn values_mut(&mut self) -> &mut [T] { &mut self.values }
+
     /// Value at `(row, col)` in the full symmetric matrix.
     ///
     /// Automatically redirects `(col, row)` when `col < row` so you
@@ -220,11 +224,22 @@ impl<T: SparseScalar> SymCsrMatrix<T> {
     /// - [`SparseError::RowOutOfRange`] / [`SparseError::ColOutOfRange`]
     /// - [`SparseError::IndexOutOfBounds`] if `(row, col)` is absent
     pub fn add_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
+        self.add_value_and_return_index(row, col, val).map(|_| ())
+    }
+
+    /// Accumulate `val` into the upper-triangle entry `(row, col)` and return its flat index.
+    ///
+    /// Used internally for building efficient index mappings across matrices
+    /// with identical topologies.
+    ///
+    /// # Errors
+    /// Same as [`add_value`].
+    pub fn add_value_and_return_index(&mut self, row: usize, col: usize, val: T) -> Result<usize> {
         self.check_upper(row, col)?;
         let idx = self.find_idx(row, col)
             .ok_or(SparseError::IndexOutOfBounds { row, col })?;
         self.values[idx] += val;
-        Ok(())
+        Ok(idx)
     }
 
     /// Overwrite `(row, col)` with `val`.
