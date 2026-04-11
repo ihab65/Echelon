@@ -51,6 +51,7 @@
 
 use assembly::{self, Model};
 use sparse::{SparseMatrix, SymCsrMatrix};
+use sparse::MatvecWorkspace;
 
 use crate::error::{AnalysisError, Result};
 use crate::integrators::Integrator;
@@ -112,6 +113,10 @@ pub struct Newmark {
 
     /// Pre-committed acceleration (used by revert).
     prev_acceleration: Vec<f64>,
+
+    // ---- Persistent Workspaces for Zero-Allocation Math ----
+    pred_buffer: Vec<f64>,
+    matvec_ws: MatvecWorkspace<f64>,
 }
 
 impl Newmark {
@@ -160,6 +165,8 @@ impl Newmark {
             current_time:      0.0,
             prev_velocity:     vec![0.0; n],
             prev_acceleration: vec![0.0; n],
+            pred_buffer:       vec![0.0; n],
+            matvec_ws:         MatvecWorkspace::new(n),
         }
     }
 
@@ -198,60 +205,53 @@ impl Integrator for Newmark {
     /// Also augments `system.k_t` will be handled by the algorithm (the
     /// driver must call `assemble_stiffness` first, then add the mass/damping
     /// contributions via this integrator).
+    ///
+    /// # Errors
+    /// - [`AnalysisError::AssemblyError`] if external load assembly or matrix-vector multiplication fails.
     fn new_step(&mut self, system: &mut GlobalSystem, model: &mut Model) -> Result<()> {
         self.current_time += self.dt;
 
         let (a0, a1, a2, a3, a4, a5) = self.coefficients();
         let n = model.n_dof();
 
-        if n != self.velocity.len() {
-            return Err(AnalysisError::InvalidConfiguration {
-                reason: format!(
-                    "Newmark: model has {n} DOFs but integrator was initialized for {} DOFs. \
-                     Rebuild the integrator after changing the model.",
-                    self.velocity.len()
-                ),
-            });
-        }
-
         // Assemble external load at t + Δt
         assembly::assemble_load_vector(model, self.current_time, &mut system.f_ext)?;
 
-        // Add inertia predictor: F_eff += M [a0 u_n + a2 u̇_n + a3 ü_n]
-        let m_contrib: Vec<f64> = (0..n)
-            .map(|i| {
-                a0 * model.u_global[i]
-                    + a2 * self.velocity[i]
-                    + a3 * self.acceleration[i]
-            })
-            .collect();
-
-        let m_force = self.mass.matvec(&m_contrib)
+        // 1. Inertia predictor (Zero Allocation)
+        for i in 0..n {
+            self.pred_buffer[i] = a0 * model.u_global[i] 
+                                + a2 * self.velocity[i] 
+                                + a3 * self.acceleration[i];
+        }
+        
+        self.mass.matvec_into(&self.pred_buffer, &mut self.matvec_ws)
             .map_err(|e| AnalysisError::from(assembly::error::AssemblyError::from(e)))?;
 
         for i in 0..n {
-            system.f_ext[i] += m_force[i];
+            system.f_ext[i] += self.matvec_ws.as_slice()[i];
         }
 
-        // Add damping predictor: F_eff += C [a1 u_n + a4 u̇_n + a5 ü_n]
+        // 2. Damping predictor (Zero Allocation)
         if let Some(ref c) = self.damping {
-            let c_contrib: Vec<f64> = (0..n)
-                .map(|i| {
-                    a1 * model.u_global[i]
-                        + a4 * self.velocity[i]
-                        + a5 * self.acceleration[i]
-                })
-                .collect();
-            let c_force = c.matvec(&c_contrib)
-                .map_err(|e| AnalysisError::from(assembly::error::AssemblyError::from(e)))?;
             for i in 0..n {
-                system.f_ext[i] += c_force[i];
+                self.pred_buffer[i] = a1 * model.u_global[i] 
+                                    + a4 * self.velocity[i] 
+                                    + a5 * self.acceleration[i];
+            }
+            
+            c.matvec_into(&self.pred_buffer, &mut self.matvec_ws)
+                .map_err(|e| AnalysisError::from(assembly::error::AssemblyError::from(e)))?;
+                
+            for i in 0..n {
+                system.f_ext[i] += self.matvec_ws.as_slice()[i];
             }
         }
 
         Ok(())
     }
 
+    /// # Errors
+    /// - [`AnalysisError::AssemblyError`] if adding mass or damping to stiffness fails.
     fn form_tangent(&self, system: &mut GlobalSystem) -> Result<()> {
         // K_eff = K_T + a0*M + a1*C  (Newmark coefficients)
         // a0 = 1/(β Δt²),  a1 = γ/(β Δt)
@@ -282,14 +282,14 @@ impl Integrator for Newmark {
         // This is called by the driver after a successful Newton loop.
         // The driver passes the model's u_global to update v and a.
         // For simplicity, commit just saves the current state.
-        self.prev_velocity     = self.velocity.clone();
-        self.prev_acceleration = self.acceleration.clone();
+        self.prev_velocity.copy_from_slice(&self.velocity);
+        self.prev_acceleration.copy_from_slice(&self.acceleration);
     }
 
     fn revert(&mut self) {
         self.current_time  -= self.dt;
-        self.velocity       = self.prev_velocity.clone();
-        self.acceleration   = self.prev_acceleration.clone();
+        self.velocity.copy_from_slice(&self.prev_velocity);
+        self.acceleration.copy_from_slice(&self.prev_acceleration);
     }
 
     fn name(&self) -> &'static str {

@@ -121,6 +121,10 @@ impl Integrator for DispControl {
     /// needed to achieve the target control DOF displacement.
     ///
     /// For the first step, a unit λ increment is used as a starting predictor.
+    ///
+    /// # Errors
+    /// - [`AnalysisError::InvalidConfiguration`] if `control_dof` is out of bounds.
+    /// - [`AnalysisError::AssemblyError`] if load vector assembly fails.
     fn new_step(&mut self, system: &mut GlobalSystem, model: &mut Model) -> Result<()> {
         // Validate that the control DOF is within range
         let n_dof = model.n_dof();

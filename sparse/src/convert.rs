@@ -15,6 +15,24 @@ use crate::SparseScalar;
 use crate::{CsrMatrix, SymCsrMatrix, CscMatrix};
 use crate::error::{SparseError, Result};
 
+/// Persistent workspace for zero-allocation matrix conversions.
+pub struct ConvertWorkspace<T: SparseScalar> {
+    pub col_count: Vec<usize>,
+    pub cursor: Vec<usize>,
+    /// A pre-allocated buffer used to sort column entries without allocating.
+    pub pairs: Vec<(usize, T)>, 
+}
+
+impl<T: SparseScalar> ConvertWorkspace<T> {
+    pub fn new(n: usize) -> Self {
+        Self {
+            col_count: vec![0; n],
+            cursor: vec![0; n],
+            pairs: Vec::with_capacity(n), // Max possible entries in a column is n
+        }
+    }
+}
+
 // -----------------------------------------------------------------
 // CsrMatrix → CscMatrix
 // -----------------------------------------------------------------
@@ -183,6 +201,82 @@ pub fn sym_to_csc<T>(sym: &SymCsrMatrix<T>) -> CscMatrix<T> where T: SparseScala
     CscMatrix::from_raw(n, n, col_ptr, row_idx, values)
 }
 
+/// Zero-allocation conversion from SymCsrMatrix to CSC.
+/// Overwrites the provided `col_ptr`, `row_idx`, and `values` vectors.
+pub fn sym_to_csc_into<T>(
+    sym:     &SymCsrMatrix<T>,
+    col_ptr: &mut Vec<usize>,
+    row_idx: &mut Vec<usize>,
+    values:  &mut Vec<T>,
+    ws:      &mut ConvertWorkspace<T>,
+) where 
+    T: SparseScalar 
+{
+    let n = sym.n;
+
+    // 1. Clear and prepare workspaces
+    ws.col_count.clear();
+    ws.col_count.resize(n, 0);
+
+    for (row, col, _) in sym.iter_upper() {
+        ws.col_count[col] += 1;
+        if col != row {
+            ws.col_count[row] += 1;
+        }
+    }
+
+    // 2. Build col_ptr
+    col_ptr.clear();
+    col_ptr.push(0);
+    for &cnt in &ws.col_count {
+        col_ptr.push(col_ptr.last().unwrap() + cnt);
+    }
+
+    let nnz_full = *col_ptr.last().unwrap();
+    
+    // Resize output vectors without reallocating (if capacity is sufficient)
+    row_idx.clear();
+    row_idx.resize(nnz_full, 0);
+    values.clear();
+    values.resize(nnz_full, T::zero());
+
+    // 3. Initialize cursors
+    ws.cursor.clear();
+    ws.cursor.extend_from_slice(&col_ptr[..n]);
+
+    // 4. Scatter upper triangle and its mirror
+    for (row, col, val) in sym.iter_upper() {
+        let pos = ws.cursor[col];
+        row_idx[pos] = row;
+        values[pos]  = val;
+        ws.cursor[col] += 1;
+
+        if col != row {
+            let pos2 = ws.cursor[row];
+            row_idx[pos2] = col;
+            values[pos2]  = val;
+            ws.cursor[row] += 1;
+        }
+    }
+
+    // 5. Zero-Allocation Sorting
+    for col in 0..n {
+        let start = col_ptr[col];
+        let end   = col_ptr[col + 1];
+        
+        ws.pairs.clear(); // Clear the persistent buffer instead of making a new Vec!
+        for i in start..end {
+            ws.pairs.push((row_idx[i], values[i]));
+        }
+        
+        ws.pairs.sort_unstable_by_key(|&(r, _)| r);
+        
+        for (k, &(r, v)) in ws.pairs.iter().enumerate() {
+            row_idx[start + k] = r;
+            values[start + k]  = v;
+        }
+    }
+}
 // -----------------------------------------------------------------
 // CsrMatrix → SymCsrMatrix  (extract upper triangle)
 // -----------------------------------------------------------------

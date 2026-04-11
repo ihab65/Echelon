@@ -71,14 +71,53 @@
 //! - Ashcraft, C., Grimes, R., Lewis, J. (1998). "Accurate symmetric indefinite
 //!   linear equation solvers." *SIAM J. Matrix Anal. Appl. 20*(2).
 
-use sparse::{SparseScalar, SymCsrMatrix};
-use sparse::convert::sym_to_csc;
+use sparse::{ConvertWorkspace, SparseScalar, SymCsrMatrix};
+use sparse::convert::{sym_to_csc, sym_to_csc_into};
 
 use crate::cholesky::symbolic;
 use crate::cholesky::symbolic::SymbolicCholesky;
 use crate::error::{Result, SolverError};
 use crate::linear::LinearSolver;
 use crate::ordering::{Ordering, Permutation};
+
+/// Pre-allocated workspaces for the numeric factorization and solve phases.
+struct LdltWorkspace<T: SparseScalar> {
+    w: Vec<T>,
+    active: Vec<bool>,
+    touched: Vec<usize>,
+    stack: Vec<usize>,
+    x_perm: Vec<T>, // For the unpermute step in solve()
+    
+    // Cached mapping for permute_sym_into
+    k_perm_map: Vec<usize>,
+    k_perm: SymCsrMatrix<T>,
+
+    // Arrays to hold the converted CSC matrix
+    csc_col_ptr: Vec<usize>,
+    csc_row_idx: Vec<usize>,
+    csc_values: Vec<T>,
+    
+    // The workspace for the conversion math
+    convert_ws: ConvertWorkspace<T>,
+}
+
+impl<T: SparseScalar> LdltWorkspace<T> {
+    fn new(n: usize, k_perm: SymCsrMatrix<T>, k_perm_map: Vec<usize>) -> Self {
+        Self {
+            w: vec![T::zero(); n],
+            active: vec![false; n],
+            touched: Vec::with_capacity(n),
+            stack: Vec::with_capacity(n),
+            x_perm: vec![T::zero(); n],
+            k_perm_map,
+            k_perm,
+            csc_col_ptr: vec![0; n + 1],
+            csc_row_idx: vec![0; 0], // Will be resized
+            csc_values: vec![T::zero(); 0], // Will be resized
+            convert_ws: ConvertWorkspace::new(n),
+        }
+    }
+}
 
 // -----------------------------------------------------------------
 // Numeric LDLT factor
@@ -109,6 +148,17 @@ struct NumericLdlt<T: SparseScalar> {
     d_values: Vec<T>,
     /// Dimension of the factored system.
     n: usize,
+}
+
+// Add a constructor to NumericLdlt so we can pre-allocate it
+impl<T: SparseScalar> NumericLdlt<T> {
+    fn new(n: usize, nnz: usize) -> Self {
+        Self {
+            l_values: vec![T::zero(); nnz],
+            d_values: vec![T::zero(); n],
+            n,
+        }
+    }
 }
 
 // -----------------------------------------------------------------
@@ -156,6 +206,13 @@ pub struct LdltSolver<T: SparseScalar> {
     symbolic: Option<SymbolicCholesky>,
     /// Cached numeric LDLᵀ factors from the last `factorize` call.
     numeric:  Option<NumericLdlt<T>>,
+    /// Pre-allocated workspaces for numeric factorization and solve phases.
+    workspace: Option<LdltWorkspace<T>>,
+    /// Whether `factorize` has been called since the last `analyze`.
+    ///
+    /// The `numeric` buffer is pre-allocated in `analyze()` but only
+    /// contains valid factor values after `factorize()` succeeds.
+    factorized: bool,
 }
 
 impl<T: SparseScalar> LdltSolver<T> {
@@ -170,6 +227,8 @@ impl<T: SparseScalar> LdltSolver<T> {
             perm:     None,
             symbolic: None,
             numeric:  None,
+            workspace: None,
+            factorized: false,
         }
     }
 
@@ -196,6 +255,8 @@ impl<T: SparseScalar> LdltSolver<T> {
         self.perm     = None;
         self.symbolic = None;
         self.numeric  = None;
+        self.workspace = None;
+        self.factorized = false;
     }
 
     /// Return the current ordering strategy.
@@ -213,7 +274,7 @@ impl<T: SparseScalar> LdltSolver<T> {
     /// Return `true` if `factorize` has been called since the last `analyze`.
     #[inline]
     pub fn is_factorized(&self) -> bool {
-        self.numeric.is_some()
+        self.factorized
     }
 
     /// Number of negative diagonal pivots in the last factorization.
@@ -229,6 +290,7 @@ impl<T: SparseScalar> LdltSolver<T> {
     /// - `negative_pivots() > 0`  → `K` is indefinite (structure has passed
     ///   one or more limit / bifurcation points).
     pub fn negative_pivots(&self) -> Option<usize> {
+        if !self.factorized { return None; }
         self.numeric.as_ref().map(|num| {
             num.d_values
                 .iter()
@@ -242,6 +304,7 @@ impl<T: SparseScalar> LdltSolver<T> {
     ///
     /// Returns `None` if `factorize` has not been called.
     pub fn pivots(&self) -> Option<&[T]> {
+        if !self.factorized { return None; }
         self.numeric.as_ref().map(|num| num.d_values.as_slice())
     }
 }
@@ -257,15 +320,24 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
     /// symbolic Cholesky to obtain the elimination tree and fill pattern.
     /// The result is reused across all subsequent `factorize` calls as long
     /// as the non-zero pattern of `K` is unchanged.
+    ///
+    /// # Errors
+    /// - [`SolverError::Sparse`] if permutation fails.
     fn analyze(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
-        let perm   = self.ordering.clone().into_permutation(k);
-        let k_perm = perm.permute_sym(k)?;
-        let k_csc  = sym_to_csc(&k_perm);
-        let sym    = symbolic::analyze(&k_csc)?;
+        let perm = self.ordering.clone().into_permutation(k);
+        let (k_perm, k_perm_map) = perm.permute_sym_with_map(k)?;
+        let k_csc = sym_to_csc(&k_perm);
+        let sym   = symbolic::analyze(&k_csc)?;
+
+        // Pre-allocate numeric factors and workspaces based on the pattern
+        let n = sym.n;
+        let nnz = sym.nnz_l();
+        self.numeric   = Some(NumericLdlt::new(n, nnz));
+        self.workspace = Some(LdltWorkspace::new(n, k_perm, k_perm_map));
+        self.factorized = false;
 
         self.perm     = Some(perm);
         self.symbolic = Some(sym);
-        self.numeric  = None;
         Ok(())
     }
 
@@ -282,11 +354,22 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
     fn factorize(&mut self, k: &SymCsrMatrix<T>) -> Result<()> {
         let perm = self.perm.as_ref().ok_or(SolverError::NotAnalyzed)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotAnalyzed)?;
+        let num  = self.numeric.as_mut().ok_or(SolverError::NotAnalyzed)?;
+        let ws   = self.workspace.as_mut().ok_or(SolverError::NotAnalyzed)?;
 
-        let k_perm = perm.permute_sym(k)?;
-        let k_csc  = sym_to_csc(&k_perm);
+        // Zero-allocation permutation reusing the fixed sparsity pattern
+        perm.permute_sym_into(k, &mut ws.k_perm, &ws.k_perm_map);
+        
+        sym_to_csc_into(
+            &ws.k_perm, 
+            &mut ws.csc_col_ptr, 
+            &mut ws.csc_row_idx, 
+            &mut ws.csc_values, 
+            &mut ws.convert_ws
+        );
 
-        self.numeric = Some(ldlt_factorize(&k_csc, sym)?);
+        ldlt_factorize(sym, num, ws)?;
+        self.factorized = true;
         Ok(())
     }
 
@@ -298,11 +381,15 @@ impl<T: SparseScalar> LinearSolver<T> for LdltSolver<T> {
     /// # Errors
     /// - [`SolverError::NotFactorized`] if `factorize` has not been called.
     /// - [`SolverError::RhsSizeMismatch`] if vector lengths are inconsistent.
-    fn solve(&self, f: &[T], u: &mut [T]) -> Result<()> {
+    fn solve(&mut self, f: &[T], u: &mut [T]) -> Result<()> {
+        if !self.factorized {
+            return Err(SolverError::NotFactorized);
+        }
         let perm = self.perm.as_ref().ok_or(SolverError::NotFactorized)?;
         let sym  = self.symbolic.as_ref().ok_or(SolverError::NotFactorized)?;
         let num  = self.numeric.as_ref().ok_or(SolverError::NotFactorized)?;
-        ldlt_solve(sym, num, perm, f, u)
+        
+        ldlt_solve(sym, num, perm, f, u, &mut self.workspace.as_mut().unwrap().x_perm)
     }
 }
 
@@ -330,156 +417,98 @@ impl<T: SparseScalar> Default for LdltSolver<T> {
 /// of `D[j] = w[j]`, and sub-diagonal entries are `L[i,j] = w[i] / D[j]`
 /// (no division by `sqrt(D[j])`).
 fn ldlt_factorize<T>(
-    k_csc: &sparse::CscMatrix<T>,
     sym:   &SymbolicCholesky,
-) -> Result<NumericLdlt<T>>
+    num:   &mut NumericLdlt<T>,
+    ws:    &mut LdltWorkspace<T>,
+) -> Result<()>
 where
     T: SparseScalar,
 {
-    let n    = sym.n;
-    let nnz  = sym.nnz_l();
-
-    debug_assert_eq!(k_csc.nrows, n);
-    debug_assert_eq!(k_csc.ncols, n);
-
-    // l_values[col_ptr[j]] is the dummy diagonal slot (L[j,j] = 1, not stored).
-    // Entries col_ptr[j]+1 .. col_ptr[j+1] are the sub-diagonal L[i,j].
-    let mut l_values = vec![T::zero(); nnz];
-    let mut d_values = vec![T::zero(); n];
-
-    // Build children list from the elimination tree (same as numeric Cholesky).
-    let mut children = vec![Vec::<usize>::new(); n];
-    for (c, &p) in sym.parent.iter().enumerate() {
-        if p < n {
-            children[p].push(c);
-        }
-    }
-    for ch in &mut children {
-        ch.sort_unstable();
-    }
-
-    // Dense workspace. `active[i]` and `touched` track which entries of `w`
-    // have been written this column so we can clear in O(touched) per column.
-    let mut w       = vec![T::zero(); n];
-    let mut active  = vec![false; n];
-    let mut touched = Vec::with_capacity(64);
+    let n = sym.n;
+    
+    // Clear numeric arrays just in case
+    num.l_values.fill(T::zero());
+    num.d_values.fill(T::zero());
 
     for j in 0..n {
-        touched.clear();
+        ws.touched.clear();
 
-        // ----------------------------------------------------------------
-        // Step 1 — scatter column j of K (rows >= j) into w.
-        // ----------------------------------------------------------------
-        {
-            let k_start = k_csc.col_ptr()[j];
-            let k_end   = k_csc.col_ptr()[j + 1];
-            let k_rows  = k_csc.row_idx();
-            let k_vals  = k_csc.values();
+        // Step 1 — scatter directly from the workspace CSC arrays!
+        let k_start = ws.csc_col_ptr[j];
+        let k_end   = ws.csc_col_ptr[j + 1];
 
-            for idx in k_start..k_end {
-                let row = k_rows[idx];
-                if row >= j {
-                    w[row] = k_vals[idx];
-                    if !active[row] {
-                        active[row] = true;
-                        touched.push(row);
-                    }
+        for idx in k_start..k_end {
+            let row = ws.csc_row_idx[idx];
+            if row >= j {
+                ws.w[row] = ws.csc_values[idx];
+                if !ws.active[row] {
+                    ws.active[row] = true;
+                    ws.touched.push(row);
                 }
             }
         }
 
-        // ----------------------------------------------------------------
-        // Step 2 — left-looking update.
-        //
-        // For each descendant c of j (c < j, L[j,c] ≠ 0):
-        //   w[i] -= L[j,c] * D[c] * L[i,c]   for i >= j in pattern(L[:,c])
-        //
-        // This differs from Cholesky in that D[c] enters explicitly instead
-        // of being absorbed into the diagonal of L.
-        // ----------------------------------------------------------------
-        {
-            let mut stack = Vec::new();
-            for &c in &children[j] {
-                stack.push(c);
+        // Step 2 — left-looking update using CACHED children!
+        ws.stack.clear();
+        for &c in &sym.children[j] {
+            ws.stack.push(c);
+        }
+
+        while let Some(c) = ws.stack.pop() {
+            let col_start = sym.col_ptr[c];
+            let col_end   = sym.col_ptr[c + 1];
+            let col_rows  = &sym.row_idx[col_start..col_end];
+
+            let local_j = match col_rows.binary_search(&j) {
+                Ok(pos)  => pos,
+                Err(_)   => continue,
+            };
+
+            let ljc = num.l_values[col_start + local_j];
+            let dc  = num.d_values[c];
+
+            for pos in local_j..col_rows.len() {
+                let row = col_rows[pos];
+                ws.w[row] -= ljc * dc * num.l_values[col_start + pos];
+                if !ws.active[row] {
+                    ws.active[row] = true;
+                    ws.touched.push(row);
+                }
             }
 
-            while let Some(c) = stack.pop() {
-                let col_start = sym.col_ptr[c];
-                let col_end   = sym.col_ptr[c + 1];
-                let col_rows  = &sym.row_idx[col_start..col_end];
-
-                // Find the position of row j in column c of L.
-                let local_j = match col_rows.binary_search(&j) {
-                    Ok(pos)  => pos,
-                    Err(_)   => continue, // should never miss for a valid descendant
-                };
-
-                // L[j,c] — the entry connecting descendant c to column j.
-                let ljc = l_values[col_start + local_j];
-                // D[c] — the diagonal pivot of column c.
-                let dc  = d_values[c];
-
-                // Update w[i] for all i >= j in column c.
-                // Note: local_j corresponds to row j (the diagonal of this column).
-                for pos in local_j..col_rows.len() {
-                    let row = col_rows[pos];
-                    // w[i] -= L[j,c] * D[c] * L[i,c]
-                    // For the diagonal position (pos == local_j): L[i,c] = L[j,c] = ljc.
-                    w[row] -= ljc * dc * l_values[col_start + pos];
-                    if !active[row] {
-                        active[row] = true;
-                        touched.push(row);
-                    }
-                }
-
-                // Push children of c (also descendants of j).
-                for &gc in &children[c] {
-                    stack.push(gc);
-                }
+            for &gc in &sym.children[c] {
+                ws.stack.push(gc);
             }
         }
 
-        // ----------------------------------------------------------------
-        // Step 3 — pivot: D[j] = w[j].
-        //
-        // Unlike Cholesky there is no sqrt. Negative pivots are valid.
-        // A near-zero pivot (|D[j]| < 1e-14) indicates singularity.
-        // ----------------------------------------------------------------
-        let dj = w[j];
+        // Step 3 — pivot
+        let dj = ws.w[j];
         if dj.real_part().abs() < 1e-14 {
-            // Clear workspace before returning.
-            for &r in &touched {
-                w[r]      = T::zero();
-                active[r] = false;
+            for &r in &ws.touched {
+                ws.w[r]      = T::zero();
+                ws.active[r] = false;
             }
             return Err(SolverError::NotPositiveDefinite { index: j, value: dj.real_part() });
         }
-        d_values[j] = dj;
+        num.d_values[j] = dj;
 
-        // Diagonal slot in l_values is left as zero (L[j,j] = 1, not stored).
-        // col_ptr[j] points to the diagonal slot — leave l_values[col_ptr[j]] = 0.
-
-        // ----------------------------------------------------------------
-        // Step 4 — sub-diagonal: L[i,j] = w[i] / D[j].
-        // ----------------------------------------------------------------
+        // Step 4 — sub-diagonal
         let l_col_start = sym.col_ptr[j];
         let l_col_end   = sym.col_ptr[j + 1];
 
         for pos in (l_col_start + 1)..l_col_end {
             let row = sym.row_idx[pos];
-            l_values[pos] = w[row] / dj;
+            num.l_values[pos] = ws.w[row] / dj;
         }
 
-        // ----------------------------------------------------------------
-        // Step 5 — clear workspace.
-        // ----------------------------------------------------------------
-        for &r in &touched {
-            w[r]      = T::zero();
-            active[r] = false;
+        // Step 5 — clear workspace
+        for &r in &ws.touched {
+            ws.w[r]      = T::zero();
+            ws.active[r] = false;
         }
     }
 
-    Ok(NumericLdlt { l_values, d_values, n })
+    Ok(())
 }
 
 // -----------------------------------------------------------------
@@ -502,6 +531,7 @@ fn ldlt_solve<T>(
     perm: &Permutation,
     f:    &[T],
     u:    &mut [T],
+    x_perm: &mut [T]
 ) -> Result<()>
 where
     T: SparseScalar,
@@ -568,7 +598,8 @@ where
     // ------------------------------------------------------------------
     // Step 5 — unpermute: u_final[perm[i]] = x_perm[i]
     // ------------------------------------------------------------------
-    let x_perm: Vec<T> = u.to_vec();
+    x_perm.copy_from_slice(u); // Replaces `let x_perm = u.to_vec();`
+    
     for i in 0..n {
         u[perm.old_index(i)] = x_perm[i];
     }

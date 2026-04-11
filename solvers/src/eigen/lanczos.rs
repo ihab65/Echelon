@@ -110,7 +110,7 @@ impl EigenSolver for LanczosEigenSolver {
     ///   if the implicit QL algorithm fails to converge within 30 sweeps.
     fn solve_modes(&mut self, n_modes: usize) -> Result<EigenResult> {
         // ── Validate state ────────────────────────────────────────────────────
-        let ldlt = self.ldlt.as_ref().ok_or(SolverError::NotAnalyzed)?;
+        let ldlt = self.ldlt.as_mut().ok_or(SolverError::NotAnalyzed)?;
         let m    = self.m_mat.as_ref().ok_or(SolverError::NotAnalyzed)?;
         let n    = self.n_dof;
 

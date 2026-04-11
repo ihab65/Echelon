@@ -153,6 +153,10 @@ impl<T: SparseScalar> CooBuilder<T> {
 // way to get real-world sparse matrices into the library for testing and benchmarking.
 #[cfg(feature = "io")]
 impl<T: SparseScalar> CooBuilder<T> {
+    /// Reads a coordinate format matrix from a Matrix Market (.mtx) file.
+    ///
+    /// # Errors
+    /// - [`SparseError::IoError`] if the file cannot be read or parsed.
     pub fn from_mtx<P: AsRef<std::path::Path>>(path: P) -> Result<Self>
     where
         T: From<f64>,

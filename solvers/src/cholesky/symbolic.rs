@@ -65,6 +65,9 @@ pub struct SymbolicCholesky {
     /// `parent[j] == n` means column `j` is a root.
     pub parent: Vec<usize>,
 
+    /// Children lists: `children[j]` is the list of columns `c` where
+    pub children: Vec<Vec<usize>>,
+
     /// Column pointers for `L` in CSC format.
     /// `col_ptr[j]..col_ptr[j+1]` indexes into `row_idx` for column `j`.
     /// Includes the diagonal entry.
@@ -100,6 +103,9 @@ impl SymbolicCholesky {
 /// The returned [`SymbolicCholesky`] should be cached and reused for
 /// every subsequent call to [`super::numeric::factorize`] as long as
 /// the topology (non-zero pattern) of `K` does not change.
+///
+/// # Errors
+/// Currently infallible, but returns `Result` for API consistency and future bounds checking.
 pub fn analyze<T>(k_csc: &CscMatrix<T>) -> Result<SymbolicCholesky> 
     where T: SparseScalar
 {
@@ -107,7 +113,7 @@ pub fn analyze<T>(k_csc: &CscMatrix<T>) -> Result<SymbolicCholesky>
     let parent = elimination_tree(k_csc);
     let children = build_children(&parent, n);
     let (col_ptr, row_idx) = fill_pattern(k_csc, &parent, &children);
-    Ok(SymbolicCholesky { parent, col_ptr, row_idx, n })
+    Ok(SymbolicCholesky { parent, children, col_ptr, row_idx, n })
 }
 
 // -----------------------------------------------------------------

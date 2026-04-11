@@ -144,6 +144,88 @@ pub fn solve<T>(
 }
 
 // -----------------------------------------------------------------
+// Zero-allocation solve
+// -----------------------------------------------------------------
+
+/// Solve `K u = f` using the factored `K_perm = L Lᵀ` and permutation `P`,
+/// with a pre-allocated scratch buffer for the unpermute step.
+///
+/// This is the zero-allocation counterpart of [`solve`]. The only
+/// difference is that the caller provides `x_perm` as a scratch buffer
+/// instead of allocating `u.to_vec()` on every call.
+///
+/// # Parameters
+/// - `sym`    — symbolic factor (pattern of L)
+/// - `num`    — numeric factor (values of L)
+/// - `perm`   — RCM permutation: `perm[new] = old`
+/// - `f`      — right-hand side in **original** DOF order
+/// - `u`      — output solution in **original** DOF order
+/// - `x_perm` — scratch buffer of length `n` (contents overwritten)
+///
+/// # Errors
+/// - [`SolverError::RhsSizeMismatch`] if `f.len() != n` or `u.len() != n`
+pub fn solve_with_buffer<T>(
+    sym:    &SymbolicCholesky,
+    num:    &NumericCholesky<T>,
+    perm:   &Permutation,
+    f:      &[T],
+    u:      &mut [T],
+    x_perm: &mut [T],
+) -> Result<()>
+where
+    T: SparseScalar,
+{
+    let n = num.n;
+    if f.len() != n {
+        return Err(SolverError::RhsSizeMismatch { expected: n, got: f.len() });
+    }
+    if u.len() != n {
+        return Err(SolverError::RhsSizeMismatch { expected: n, got: u.len() });
+    }
+    debug_assert_eq!(sym.n, n);
+    debug_assert_eq!(perm.len(), n);
+
+    // Step 1 — permute RHS: b[i] = f[perm[i]]
+    for i in 0..n {
+        u[i] = f[perm.old_index(i)];
+    }
+
+    // Step 2 — forward substitution: L y = b  (in-place in u)
+    for j in 0..n {
+        let l_start = sym.col_ptr[j];
+        let l_end   = sym.col_ptr[j + 1];
+        let ljj = num.values[l_start];
+        debug_assert!(ljj.real_part() > T::zero().real_part(), "L[{j},{j}] must be positive");
+        u[j] /= ljj;
+        let yj = u[j];
+        for pos in (l_start + 1)..l_end {
+            let i = sym.row_idx[pos];
+            u[i] -= num.values[pos] * yj;
+        }
+    }
+
+    // Step 3 — backward substitution: Lᵀ x = y  (in-place in u)
+    for j in (0..n).rev() {
+        let l_start = sym.col_ptr[j];
+        let l_end   = sym.col_ptr[j + 1];
+        for pos in (l_start + 1)..l_end {
+            let i = sym.row_idx[pos];
+            u[j] -= num.values[pos] * u[i];
+        }
+        let ljj = num.values[l_start];
+        u[j] /= ljj;
+    }
+
+    // Step 4 — unpermute using pre-allocated buffer instead of u.to_vec()
+    x_perm[..n].copy_from_slice(&u[..n]);
+    for i in 0..n {
+        u[perm.old_index(i)] = x_perm[i];
+    }
+
+    Ok(())
+}
+
+// -----------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------
 

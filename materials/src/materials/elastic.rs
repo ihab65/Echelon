@@ -46,6 +46,9 @@ pub struct ElasticUniaxial {
 
 impl ElasticUniaxial {
     /// Construct with elastic modulus `e` (Pa).
+    ///
+    /// # Errors
+    /// - [`MaterialError::InadmissibleParameter`] if `e <= 0.0` or `rho < 0.0`.
     pub fn new(e: f64, rho: Option<f64>) -> Result<Self> {
         if e <= 0.0 {
             return Err(MaterialError::InadmissibleParameter {

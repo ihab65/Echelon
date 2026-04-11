@@ -37,6 +37,9 @@ impl<T: SparseScalar + Sum + AddAssign> CscMatrix<T> {
     }
 
     /// Compute `y = A * x`, returning an allocated `Vec<T>`.
+    ///
+    /// # Errors
+    /// - [`SparseError::DimensionMismatch`] if `x.len() != self.ncols`.
     pub fn matvec(&self, x: &[T]) -> Result<Vec<T>> {
         let mut ws = MatvecWorkspace::new(self.nrows);
         self.matvec_into(x, &mut ws)?;
@@ -75,6 +78,9 @@ impl<T: SparseScalar + Sum + AddAssign> CscMatrix<T> {
     }
 
     /// Compute `y = Aᵀ * x`, returning an allocated `Vec<T>`.
+    ///
+    /// # Errors
+    /// - [`SparseError::DimensionMismatch`] if `x.len() != self.nrows`.
     pub fn matvec_transpose(&self, x: &[T]) -> Result<Vec<T>> {
         let mut ws = MatvecWorkspace::new(self.ncols);
         self.matvec_transpose_into(x, &mut ws)?;

@@ -299,6 +299,12 @@ impl<T: SparseScalar> CsrMatrix<T> {
 
 impl<T: SparseScalar> CsrMatrix<T> {
     /// Verify all internal invariants.
+    ///
+    /// # Errors
+    /// - [`SparseError::PatternLengthMismatch`] if the row pointer array length is invalid.
+    /// - [`SparseError::DimensionMismatch`] if the values array does not match the column indices.
+    /// - [`SparseError::ColOutOfRange`] if any column index exceeds the matrix dimensions.
+    /// - [`SparseError::IndexOutOfBounds`] if column indices in a row are not strictly increasing.
     pub fn validate(&self) -> Result<()> {
         if self.row_ptr.len() != self.nrows + 1 {
             return Err(SparseError::PatternLengthMismatch {
@@ -347,6 +353,11 @@ impl<T: SparseScalar> CsrMatrix<T> {
             .map(|local| start + local)
     }
 
+    /// Verify a given `(row, col)` coordinate is within the matrix dimensions.
+    ///
+    /// # Errors
+    /// - [`SparseError::RowOutOfRange`] if `row >= nrows`.
+    /// - [`SparseError::ColOutOfRange`] if `col >= ncols`.
     #[inline]
     pub(crate) fn check_bounds(&self, row: usize, col: usize) -> Result<()> {
         if row >= self.nrows {

@@ -77,8 +77,9 @@ impl Truss2d {
     /// * `e` — Young's modulus (Pa)
     /// * `a` — cross-section area (m²)
     ///
-    /// # Panics
-    /// Panics if the element has zero length (coincident nodes) or if `E` or `A` ≤ 0.
+    /// # Errors
+    /// - [`ElementError::InadmissibleSection`] if `a <= 0.0`.
+    /// - [`CoreError::DegenerateGeometry`] if `node1` and `node2` are coincident.
     pub fn new(
         node1: NodeId, node2: NodeId,
         x1: f64, y1: f64,
