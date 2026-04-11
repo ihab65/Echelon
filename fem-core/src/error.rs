@@ -14,10 +14,11 @@ pub enum CoreError {
     /// all strain-displacement relations.
     ///
     /// The `x1/y1` and `x2/y2` fields are the coordinates of the two
-    /// coincident (or near-coincident) nodes.
+    /// coincident (or near-coincident) nodes. For 3D elements, `z1`
+    /// and `z2` are also set.
     #[error(
-        "Degenerate element geometry: nodes at ({x1:.6e}, {y1:.6e}) and \
-         ({x2:.6e}, {y2:.6e}) are coincident (computed length = {length:.6e})."
+        "Degenerate element geometry: nodes at ({x1:.6e}, {y1:.6e}{z1_str}) and \
+         ({x2:.6e}, {y2:.6e}{z2_str}) are coincident (computed length = {length:.6e})."
     )]
     #[diagnostic(
         code(echelon::fem_core::geometry::degenerate_element),
@@ -39,8 +40,14 @@ pub enum CoreError {
     DegenerateGeometry {
         x1: f64,
         y1: f64,
+        /// Z-coordinate of node 1 (formatted string; empty for 2D).
+        #[diagnostic(skip)]
+        z1_str: String,
         x2: f64,
         y2: f64,
+        /// Z-coordinate of node 2 (formatted string; empty for 2D).
+        #[diagnostic(skip)]
+        z2_str: String,
         length: f64,
     },
 
@@ -62,6 +69,35 @@ pub enum CoreError {
         )
     )]
     NonOrthogonalTransform { norm_sq: f64, deviation: f64 },
+
+    /// The reference vector used to define the local y/z axes of a 3D
+    /// element is parallel (or nearly parallel) to the element axis.
+    ///
+    /// This means `e_x × v_ref ≈ 0`, so the cross product cannot define
+    /// a unique local z-axis.
+    #[error(
+        "Reference vector ({vx:.6e}, {vy:.6e}, {vz:.6e}) is parallel to \
+         the element axis. The cross product magnitude is {cross_mag:.6e}."
+    )]
+    #[diagnostic(
+        code(echelon::fem_core::geometry::parallel_reference_vector),
+        help(
+            "The 3D coordinate transformation requires a reference vector \
+             that is NOT parallel to the element's local x-axis (the line \
+             connecting node 1 to node 2). Choose a reference vector that \
+             forms a non-zero angle with the element axis. \n\
+             Common choices: \n\
+             - (0, 1, 0) for elements not aligned with global Y \n\
+             - (0, 0, 1) for elements not aligned with global Z \n\
+             - Any vector perpendicular to the element axis"
+        )
+    )]
+    ParallelReferenceVector {
+        vx: f64,
+        vy: f64,
+        vz: f64,
+        cross_mag: f64,
+    },
 
     /// A DOF map construction attempted to use a node ID that exceeds the
     /// range implied by the model's `ndf` (DOFs per node) and the total

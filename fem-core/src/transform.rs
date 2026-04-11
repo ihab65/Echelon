@@ -74,8 +74,10 @@ impl<T: SparseScalar> CoordTransf2d<T> {
             return Err(CoreError::DegenerateGeometry {
                 x1: x1.real_part(),
                 y1: y1.real_part(),
+                z1_str: String::new(),
                 x2: x2.real_part(),
                 y2: y2.real_part(),
+                z2_str: String::new(),
                 length: length.real_part(),
             });
         }

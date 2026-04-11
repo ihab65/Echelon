@@ -14,6 +14,7 @@
 //! | [`model`] | [`ModelDim`] — declares `ndm` and `ndf` for the analysis |
 //! | [`dense`] | Fixed-size matrix ops: `matmul`, `transform_stiffness`, `mat_as_slice` |
 //! | [`transform`] | [`CoordTransf2d`] — 2D element coordinate transforms |
+//! | [`transform3d`] | [`CoordTransf3d`] — 3D element coordinate transforms |
 //!
 //! ## Dependency position
 //!
@@ -34,6 +35,7 @@ pub mod dof_map;
 pub mod model;
 pub mod dense;
 pub mod transform;
+pub mod transform3d;
 
 pub mod error; 
 pub use error::CoreError;
@@ -44,6 +46,7 @@ pub use dof_map::DofMap;
 pub use model::ModelDim;
 use sparse::SparseScalar;
 pub use transform::CoordTransf2d;
+pub use transform3d::CoordTransf3d;
 
 // -----------------------------------------------------------------
 // Compile-time Send + Sync assertions
@@ -63,4 +66,5 @@ fn _assert_send_sync<T: SparseScalar>() {
     req::<DofMap>();
     req::<ModelDim>();
     req::<CoordTransf2d<T>>();
+    req::<CoordTransf3d<T>>();
 }
