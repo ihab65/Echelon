@@ -4,12 +4,15 @@
 //!
 //! ```text
 //! materials/
-//!   elastic.rs   — ElasticUniaxial (linear, smooth, autodiff-ready)
-//!   steel01.rs   — Steel01 (bilinear elasto-plastic, history-dependent)  [stub]
-//!   concrete01.rs— Concrete01 (Kent-Park, history-dependent)              [stub]
+//!   elastic.rs            — ElasticUniaxial (uniaxial, smooth, autodiff-ready)
+//!   elastic_isotropic.rs  — ElasticIsotropic (ND linear elastic isotropic)
+//!   steel01.rs            — Steel01 (bilinear elasto-plastic, uniaxial)   [stub]
+//!   concrete01.rs         — Concrete01 (Kent-Park, uniaxial)              [stub]
 //! ```
 //!
 //! ## Adding a new material
+//!
+//! ### Uniaxial materials
 //!
 //! 1. Create `materials/<name>.rs`.
 //! 2. Implement [`UniaxialMaterial`] (always required).
@@ -18,9 +21,19 @@
 //! 4. If the material has history dependence and should participate in
 //!    Engine B sensitivity analysis, implement [`AdjointSensitive`].
 //! 5. Add `pub mod <name>;` and a re-export below.
+//!
+//! ### ND materials
+//!
+//! 1. Create `materials/<name>.rs`.
+//! 2. Implement [`NdMaterial`] (always required).
+//! 3. Select the appropriate [`NdOrder`] for the formulation.
+//! 4. Add `pub mod <name>;` and a re-export below.
 
 mod elastic;
 pub use elastic::ElasticUniaxial;
+
+pub mod elastic_isotropic;
+pub use elastic_isotropic::{ElasticIsotropic, NdOrder};
 
 // Stubs — uncomment as implemented:
 // mod steel01;

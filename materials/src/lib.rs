@@ -1,6 +1,6 @@
 //! # materials
 //!
-//! Uniaxial constitutive models for the Echelon FEM engine.
+//! Constitutive models for the Echelon FEM engine.
 //!
 //! ## Architecture
 //!
@@ -36,26 +36,30 @@
 //!   traits/
 //!     mod.rs            — re-exports all traits
 //!     uniaxial.rs       — UniaxialMaterial (f64 Newton-Raphson interface)
+//!     nd_material.rs    — NdMaterial (multi-dim f64 Newton-Raphson interface)
 //!     adjoint.rs        — AdjointSensitive (Engine B parameter sensitivity)
 //!     smooth.rs         — SmoothUniaxial<T> (generic autodiff interface)
 //!   materials/
 //!     mod.rs            — re-exports all concrete materials
 //!     elastic.rs        — ElasticUniaxial
+//!     elastic_isotropic.rs — ElasticIsotropic (ND linear elastic)
 //!     steel01.rs        — Steel01 (planned)
 //!     concrete01.rs     — Concrete01 (planned)
 //! ```
 
-pub mod traits;
 pub mod error;
 mod materials;
+pub mod traits;
 
 // ---- Flat re-exports ----
 
 // Traits (users import these to write generic code)
-pub use traits::UniaxialMaterial;
-pub use traits::AdjointSensitive;
-pub use traits::SmoothUniaxial;
 pub use error::MaterialError;
+pub use traits::AdjointSensitive;
+pub use traits::NdMaterial;
+pub use traits::SmoothUniaxial;
+pub use traits::UniaxialMaterial;
 
 // Concrete materials
 pub use materials::ElasticUniaxial;
+pub use materials::{ElasticIsotropic, NdOrder};

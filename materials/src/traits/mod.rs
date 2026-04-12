@@ -1,6 +1,13 @@
-//! Core traits for uniaxial material models.
+//! Core traits for constitutive material models.
 //!
-//! ## Design: two complementary paths
+//! ## Design: two dimensionality tiers
+//!
+//! | Tier | Trait | Element families |
+//! |------|-------|------------------|
+//! | **Uniaxial** (scalar ε → scalar σ) | [`UniaxialMaterial`] | Truss, beam fibre |
+//! | **N-dimensional** (Voigt vector) | [`NdMaterial`] | Shell, solid, plane |
+//!
+//! Within each tier, materials are further split into two engine paths:
 //!
 //! | Path | Materials | Engine |
 //! |------|-----------|--------|
@@ -20,6 +27,9 @@
 
 mod uniaxial;
 pub use uniaxial::UniaxialMaterial;
+
+mod nd_material;
+pub use nd_material::NdMaterial;
 
 mod adjoint;
 pub use adjoint::AdjointSensitive;
