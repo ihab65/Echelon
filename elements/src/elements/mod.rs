@@ -6,6 +6,7 @@
 //! elements/
 //!   truss2d.rs      — Truss2d: 2D linear elastic truss, energy-based + adjoint
 //!   beam2d.rs       — ElasticBeam2d: 2D Euler-Bernoulli beam, closed-form stiffness
+//!   shell4.rs       — ElasticShell4: 4-node MITC4 flat-shell, ND material
 //! ```
 //!
 //! ## Adding a new element
@@ -20,6 +21,8 @@
 
 pub mod truss2d;
 pub mod beam2d;
+pub mod shell4;
 
 pub use truss2d::Truss2d;
 pub use beam2d::ElasticBeam2d;
+pub use shell4::ElasticShell4;

@@ -22,6 +22,7 @@
 //!     mod.rs            — re-exports all concrete elements
 //!     truss2d.rs        — Truss2d: energy-based 2D truss
 //!     beam2d.rs         — ElasticBeam2d: closed-form 2D beam
+//!     shell4.rs         — ElasticShell4: 4-node MITC4 flat-shell (ND material)
 //! ```
 //!
 //! ## Adding a new element
@@ -59,3 +60,4 @@ pub use error::ElementError;
 // ---- Flat re-exports: concrete elements ----
 pub use elements::Truss2d;
 pub use elements::ElasticBeam2d;
+pub use elements::ElasticShell4;

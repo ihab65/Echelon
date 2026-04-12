@@ -19,3 +19,6 @@
 
 pub mod truss;
 pub mod beam;
+pub mod gauss;
+pub mod isopar;
+pub mod shell;
