@@ -73,8 +73,8 @@ pub trait LinearSolver<T: SparseScalar> {
     /// iteration whenever the stiffness values change.
     ///
     /// # Errors
-    /// - [`SolverError::NotAnalyzed`] if `analyze` has not been called.
-    /// - [`SolverError::NotPositiveDefinite`] if `K` is not SPD.
+    /// - [`crate::error::SolverError::NotAnalyzed`] if `analyze` has not been called.
+    /// - [`crate::error::SolverError::NotPositiveDefinite`] if `K` is not SPD.
     fn factorize(&mut self, k: &SymCsrMatrix<T>) -> Result<()>;
 
     /// Triangular solve: compute `u = K⁻¹ f`.
@@ -82,8 +82,8 @@ pub trait LinearSolver<T: SparseScalar> {
     /// Both `f` and `u` are in the original (unpermuted) DOF order.
     ///
     /// # Errors
-    /// - [`SolverError::NotFactorized`] if `factorize` has not been called.
-    /// - [`SolverError::RhsSizeMismatch`] if vector lengths are inconsistent.
+    /// - [`crate::error::SolverError::NotFactorized`] if `factorize` has not been called.
+    /// - [`crate::error::SolverError::RhsSizeMismatch`] if vector lengths are inconsistent.
     fn solve(&mut self, f: &[T], u: &mut [T]) -> Result<()>;
 
     /// Convenience: `analyze` then `factorize` in one call.

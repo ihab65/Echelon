@@ -20,8 +20,8 @@
 //! this regime, `NormUnbalance` may declare premature convergence while
 //! displacements are still evolving. `NormDispIncr` catches this.
 //!
-//! Combine with [`crate::tests::unbalance::NormUnbalance`] via
-//! [`crate::tests::AndTest`] for the most reliable stopping criterion.
+//! Combine with [`crate::convergence::unbalance::NormUnbalance`] via
+//! [`crate::convergence::AndTest`] for the most reliable stopping criterion.
 
 use crate::system::GlobalSystem;
 use crate::convergence::ConvergenceTest;

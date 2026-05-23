@@ -207,7 +207,7 @@ impl<T: SparseScalar> CsrMatrix<T> {
     /// Use this when applying boundary conditions (set diagonal to `1.0`).
     ///
     /// # Errors
-    /// Same as [`add_value`].
+    /// Same as [`Self::add_value`].
     pub fn set_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_bounds(row, col)?;
         let idx = self.find_idx(row, col)

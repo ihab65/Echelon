@@ -78,7 +78,7 @@ use assembly::Model;
 /// use analysis::algorithms::newton::NewtonRaphson;
 /// use analysis::tests::unbalance::NormUnbalance;
 ///
-/// let test = Box::new(NormUnbalance::new(1e-6));
+/// let test = NormUnbalance::new(1e-6);
 /// let nr   = NewtonRaphson::new(test, 25);
 /// ```
 ///
@@ -147,14 +147,14 @@ impl NewtonRaphson {
     ///
     /// # Panics
     /// Panics if `max_iterations == 0` or `divergence_threshold ≤ 0`.
-    pub fn with_divergence_threshold(
-        test:                 Box<dyn ConvergenceTest>,
+    pub fn with_divergence_threshold<T: ConvergenceTest + 'static>(
+        test:                 T,
         max_iterations:       usize,
         divergence_threshold: f64,
     ) -> Self {
         assert!(max_iterations > 0, "max_iterations must be at least 1");
         assert!(divergence_threshold > 0.0, "divergence_threshold must be positive");
-        Self { test, max_iterations, divergence_threshold }
+        Self { test: Box::new(test), max_iterations, divergence_threshold }
     }
 }
 
@@ -304,7 +304,7 @@ mod tests {
     #[test]
     fn with_divergence_threshold_stores_value() {
         let nr = NewtonRaphson::with_divergence_threshold(
-            Box::new(NormUnbalance::new(1e-6)),
+            NormUnbalance::new(1e-6),
             20,
             1e8,
         );

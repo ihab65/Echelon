@@ -101,7 +101,7 @@ impl<T:SparseScalar> SymCsrMatrix<T> {
     /// Iterate over only the stored upper-triangle entries in `row`.
     ///
     /// Yields `(col, value)` with `col >= row`, in ascending column order.
-    /// This is faster than [`row_iter`] and is what the solver uses.
+    /// This is faster than [`Self::row_iter`] and is what the solver uses.
     ///
     /// # Errors
     /// - [`SparseError::RowOutOfRange`] if `row >= n`

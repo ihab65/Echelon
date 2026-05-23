@@ -47,7 +47,7 @@ use crate::model::Model;
 /// # Errors
 /// - [`AssemblyError::MissingDensity`] if element `element_idx` has an
 ///   all-zero mass matrix (material `rho` not set).
-/// - [`SparseError`] from `scatter_add` on pattern mismatch.
+/// - [`sparse::SparseError`] from `scatter_add` on pattern mismatch.
 pub fn assemble_mass(model: &Model, m_global: &mut SymCsrMatrix<f64>) -> Result<()> {
     m_global.zero();
 

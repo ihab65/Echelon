@@ -71,9 +71,9 @@ use crate::model::Model;
 /// `param_idx = 2` → `E` of element 1 (beam, which has 3 params: E, A, Iz).
 ///
 /// # Errors
-/// - [`AssemblyError::Element`] wrapping an [`ElementError::UnregisteredParameter`]
+/// - [`AssemblyError::Element`] wrapping an [`elements::error::ElementError::UnregisteredParameter`]
 ///   if `param_idx` is out of range for the entire model (no element owns it).
-/// - Any other [`ElementError`] from `partial_residual_wrt_param`.
+/// - Any other [`elements::error::ElementError`] from `partial_residual_wrt_param`.
 pub fn assemble_partial_residual(
     model:      &Model,
     param_idx:  usize,

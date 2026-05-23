@@ -28,7 +28,7 @@
 //! |--------------------|----------|
 //! | [`error`]          | [`AnalysisError`] — EERS diagnostic codes |
 //! | [`system`]         | [`GlobalSystem`] — pre-allocated analysis buffers |
-//! | [`tests`]          | [`ConvergenceTest`] — norm-based stopping criteria |
+//! | [`convergence`]      | [`ConvergenceTest`] — norm-based stopping criteria |
 //! | [`algorithms`]     | [`EquiSolnAlgo`] — Newton-Raphson, Modified Newton, Linear |
 //! | [`integrators`]    | [`Integrator`] — LoadControl, DispControl, Newmark, HHT |
 //! | [`drivers`]        | [`AnalysisDriver`] — top-level linear static, nonlinear static, transient |
@@ -70,14 +70,14 @@
 //! ```rust,ignore
 //! use analysis::algorithms::newton::NewtonRaphson;
 //! use analysis::integrators::statics::load_control::LoadControl;
-//! use analysis::tests::unbalance::NormUnbalance;
+//! use analysis::convergence::unbalance::NormUnbalance;
 //! use analysis::drivers::nonlinear_static::StaticNonlinear;
 //! use analysis::drivers::AnalysisDriver;
 //!
-//! let test      = Box::new(NormUnbalance::new(1e-6));
-//! let algorithm = Box::new(NewtonRaphson::new(test, 25));
-//! let integrator = Box::new(LoadControl::new(0.1));
-//! let mut driver = StaticNonlinear::new(algorithm, integrator, model.n_dof());
+//! let test       = NormUnbalance::new(1e-6);
+//! let algorithm  = NewtonRaphson::new(test, 25);
+//! let integrator = LoadControl::new(0.1);
+//! let mut driver = StaticNonlinear::new(algorithm, integrator, &model)?;
 //!
 //! let ok = driver.analyze(&mut model, 10)?;  // 10 load steps of Δλ = 0.1
 //! ```

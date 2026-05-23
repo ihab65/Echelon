@@ -1,7 +1,7 @@
 //! Sparse LDLᵀ direct solver for symmetric indefinite systems `Ku = f`.
 //!
 //! [`LdltSolver`] implements [`LinearSolver`] using a left-looking sparse
-//! LDLᵀ factorization. It **reuses the symbolic phase from [`CholeskySolver`]**
+//! LDLᵀ factorization. It **reuses the symbolic phase from [`crate::CholeskySolver`]**
 //! (same elimination tree + fill pattern) and therefore carries identical
 //! sparsity-analysis cost. The numeric phase differs: instead of computing
 //! `L` with `L[j,j] = sqrt(D[j,j])`, it extracts diagonal pivots `D[j,j]`
@@ -13,7 +13,7 @@
 //!
 //! | Condition | Solver |
 //! |-----------|--------|
-//! | `K` is symmetric positive definite (SPD) | [`CholeskySolver`] |
+//! | `K` is symmetric positive definite (SPD) | [`crate::CholeskySolver`] |
 //! | `K` is symmetric but possibly indefinite (negative eigenvalues) | [`LdltSolver`] |
 //!
 //! Common indefinite cases in structural engineering:
@@ -168,7 +168,7 @@ impl<T: SparseScalar> NumericLdlt<T> {
 /// Sparse LDLᵀ solver for symmetric indefinite systems `Ku = f`.
 ///
 /// Implements [`LinearSolver<T>`] following the standard three-phase protocol.
-/// The symbolic phase is **identical** to [`CholeskySolver`] — both use the
+/// The symbolic phase is **identical** to [`crate::CholeskySolver`] — both use the
 /// same [`SymbolicCholesky`] elimination tree and fill-pattern analysis.
 /// Only the numeric phase differs: `LdltSolver` avoids the square-root and
 /// accepts matrices with negative eigenvalues.

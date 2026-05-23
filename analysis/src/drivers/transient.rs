@@ -26,11 +26,11 @@
 //! assemble_mass(&model, &mut mass_mat)?;
 //!
 //! // Build Newmark integrator (average acceleration, no damping)
-//! let integrator = Box::new(Newmark::average_acceleration(0.01, mass_mat, None));
+//! let integrator = Newmark::average_acceleration(0.01, mass_mat, None);
 //!
 //! // Build algorithm
-//! let test      = Box::new(NormUnbalance::new(1e-4));
-//! let algorithm = Box::new(NewtonRaphson::new(test, 25));
+//! let test      = NormUnbalance::new(1e-4);
+//! let algorithm = NewtonRaphson::new(test, 25);
 //!
 //! // Create driver and run for 100 time steps (1 second at dt=0.01)
 //! let mut driver = TransientDriver::new(algorithm, integrator, &model)?;
@@ -81,11 +81,15 @@ impl TransientDriver {
     /// # Errors
     /// - [`AnalysisError::InvalidConfiguration`] if model has no elements or DOFs.
     /// - Assembly or solver errors from pattern construction.
-    pub fn new(
-        algorithm:  Box<dyn EquiSolnAlgo>,
-        integrator: Box<dyn Integrator>,
+    pub fn new<A, I>(
+        algorithm:  A,
+        integrator: I,
         model:      &Model,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        A: EquiSolnAlgo + 'static,
+        I: Integrator + 'static,
+    {
         if model.n_elements() == 0 {
             return Err(AnalysisError::InvalidConfiguration {
                 reason: "TransientDriver: model has no elements.".to_string(),
@@ -103,7 +107,13 @@ impl TransientDriver {
         let system = GlobalSystem::new(k_pattern);
         let recorders = Vec::new();
 
-        Ok(Self { algorithm, integrator, solver, system, recorders })
+        Ok(Self { 
+            algorithm: Box::new(algorithm), 
+            integrator: Box::new(integrator), 
+            solver, 
+            system, 
+            recorders 
+        })
     }
 
     /// Current simulation time.
@@ -113,8 +123,8 @@ impl TransientDriver {
     }
 
     /// Register a recorder to be triggered after each converged step.
-    pub fn add_recorder(&mut self, recorder: Box<dyn crate::recorder::Recorder>) {
-        self.recorders.push(recorder);
+    pub fn add_recorder<R: crate::recorder::Recorder + 'static>(&mut self, recorder: R) {
+        self.recorders.push(Box::new(recorder));
     }
 
     /// Access a recorder by index (for retrieving results after analysis).
@@ -142,7 +152,7 @@ impl AnalysisDriver for TransientDriver {
     ///
     /// # Errors
     /// - [`AnalysisError::InvalidConfiguration`] if system buffers are inconsistently sized.
-    /// - [`AnalysisError::SolverError`] if matrix factorization fails.
+    /// - [`crate::error::AnalysisError::Solver`] if matrix factorization fails.
     fn analyze(&mut self, model: &mut Model, steps: usize) -> Result<bool> {
         self.system.check_dof_consistency(model)?;
 

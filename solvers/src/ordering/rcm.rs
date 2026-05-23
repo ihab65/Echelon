@@ -68,7 +68,7 @@ use super::permutation::Permutation;
 
 /// Compute the RCM permutation for the graph of a symmetric matrix.
 ///
-/// Takes a [`Graph`] (built from a [`SymCsrMatrix`] via
+/// Takes a [`Graph`] (built from a [`sparse::SymCsrMatrix`] via
 /// [`Graph::from_sym`]) and returns a [`Permutation`] that can be
 /// applied to the matrix before Cholesky factorization.
 ///

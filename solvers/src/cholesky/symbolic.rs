@@ -37,7 +37,7 @@
 //!     pattern(L[:,j]) = {j} | reach[j]
 //! ```
 //!
-//! The child-propagation step is always applied (no K[j,c] guard), because
+//! The child-propagation step is always applied (no `K[j,c]` guard), because
 //! `parent[c] = j` guarantees `L[j,c] != 0` by the etree definition -- even
 //! when `K[j,c] = 0` (i.e., `L[j,c]` is a fill entry).  Skipping this for
 //! structural zeros in K produces an underestimated fill pattern.

@@ -26,11 +26,11 @@
 //!
 //! let mut driver = StaticNonlinear::new(algo, integrator, &model)?;
 //!
-//! // Record roof displacement (node 5, DOF 1 = UY)
-//! driver.add_recorder(Box::new(NodeRecorder::new(5, vec![1])));
+//! // Record horizontal displacement (DOF 1) of node 5
+//! driver.add_recorder(NodeRecorder::new(5, vec![1]));
 //!
-//! // Record internal forces at element 0
-//! driver.add_recorder(Box::new(ElementRecorder::new(0)));
+//! // Record local forces of element 0
+//! driver.add_recorder(ElementRecorder::new(0));
 //!
 //! driver.analyze(&mut model, 100)?;
 //!

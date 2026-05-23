@@ -5,10 +5,10 @@ use crate::{SparseMatrix, SparseScalar};
 
 /// Compressed Sparse Column matrix — column-oriented storage.
 ///
-/// The dual of [`CsrMatrix`]: `col_ptr` plays the role of `row_ptr`,
+/// The dual of [`crate::CsrMatrix`]: `col_ptr` plays the role of `row_ptr`,
 /// `row_idx` plays the role of `col_idx`.
 ///
-/// Produced by converting from [`CsrMatrix`] or [`SymCsrMatrix`].
+/// Produced by converting from [`crate::CsrMatrix`] or [`crate::SymCsrMatrix`].
 /// The solver crate consumes `CscMatrix` because Cholesky factorization
 /// accesses columns sequentially — the natural direction for CSC.
 ///
@@ -170,7 +170,7 @@ impl<T: SparseScalar> CscMatrix<T> {
     /// Overwrite `(row, col)` with `val`.
     ///
     /// # Errors
-    /// Same as [`add_value`].
+    /// Same as [`Self::add_value`].
     pub fn set_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_bounds(row, col)?;
         let idx = self.find_idx(row, col)

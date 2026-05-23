@@ -7,7 +7,7 @@ use crate::{SparseMatrix, SparseScalar};
 /// For every entry `(i, j)` stored here, `j >= i` (on or above the diagonal).
 /// The full matrix is implicitly `A[i,j] = A[j,i]` for `j != i`.
 ///
-/// This halves the memory of [`CsrMatrix`] for symmetric matrices and is
+/// This halves the memory of [`crate::CsrMatrix`] for symmetric matrices and is
 /// the required input format for Cholesky factorization.
 ///
 /// # Invariants
@@ -120,7 +120,7 @@ impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Build the upper-triangle pattern from element DOF connectivity.
     ///
     /// Only `(i, j)` with `j >= i` are stored.  Use this instead of
-    /// [`CsrMatrix::from_dof_connectivity`] when you know K is symmetric.
+    /// [`crate::CsrMatrix::from_dof_connectivity`] when you know K is symmetric.
     ///
     /// # Errors
     /// - [`SparseError::ColOutOfRange`] if any DOF index `>= n_dof`
@@ -233,7 +233,7 @@ impl<T: SparseScalar> SymCsrMatrix<T> {
     /// with identical topologies.
     ///
     /// # Errors
-    /// Same as [`add_value`].
+    /// Same as [`Self::add_value`].
     pub fn add_value_and_return_index(&mut self, row: usize, col: usize, val: T) -> Result<usize> {
         self.check_upper(row, col)?;
         let idx = self.find_idx(row, col)
@@ -245,7 +245,7 @@ impl<T: SparseScalar> SymCsrMatrix<T> {
     /// Overwrite `(row, col)` with `val`.
     ///
     /// # Errors
-    /// Same as [`add_value`].
+    /// Same as [`Self::add_value`].
     pub fn set_value(&mut self, row: usize, col: usize, val: T) -> Result<()> {
         self.check_upper(row, col)?;
         let idx = self.find_idx(row, col)

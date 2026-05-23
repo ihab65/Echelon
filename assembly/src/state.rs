@@ -51,8 +51,8 @@ use crate::model::Model;
 /// advance the material state prematurely.
 ///
 /// # Errors
-/// Propagates any [`ElementError`] from the element's `commit` method,
-/// which in turn propagates [`MaterialError::StrainDomainViolation`] if
+/// Propagates any [`elements::error::ElementError`] from the element's `commit` method,
+/// which in turn propagates [`materials::error::MaterialError::StrainDomainViolation`] if
 /// the converged strain falls outside the constitutive model's valid range
 /// (e.g., fracture strain exceeded in a softening model).
 pub fn commit_state(model: &mut Model) -> Result<()> {

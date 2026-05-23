@@ -7,7 +7,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
+//! ```text
 //! use assembly::loads::combo::LoadCombo;
 //!
 //! let mut dead = LoadCombo::new();

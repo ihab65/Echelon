@@ -46,7 +46,7 @@ impl<T: SparseScalar> MatvecWorkspace<T> {
 impl<T: SparseScalar + Sum + AddAssign> CsrMatrix<T> {
     /// Compute `y = A * x`, writing into `ws` with **no heap allocation**.
     ///
-    /// Preferred over [`matvec`] in any hot path.
+    /// Preferred over [`Self::matvec`] in any hot path.
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `x.len() != ncols` or
@@ -79,7 +79,7 @@ impl<T: SparseScalar + Sum + AddAssign> CsrMatrix<T> {
 
     /// Compute `y = A * x`, returning an allocated `Vec<f64>`.
     ///
-    /// Convenience wrapper — use [`matvec_into`] in performance-critical paths.
+    /// Convenience wrapper — use [`Self::matvec_into`] in performance-critical paths.
     ///
     /// # Errors
     /// - [`SparseError::DimensionMismatch`] if `x.len() != ncols`

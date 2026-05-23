@@ -6,12 +6,12 @@
 //! required for path-dependent constitutive models.
 //!
 //! Materials that are smooth and parameter-generic should *also* implement
-//! [`SmoothUniaxial`] (see `smooth.rs`) so they can be used inside
+//! [`crate::SmoothUniaxial`] (see `smooth.rs`) so they can be used inside
 //! energy-based elements with automatic differentiation.
 //!
 //! Materials that have history dependence and want to participate in
 //! Engine B adjoint sensitivity analysis should also implement
-//! [`AdjointSensitive`] (see `adjoint.rs`).
+//! [`crate::AdjointSensitive`] (see `adjoint.rs`).
 
 use crate::error::Result;
 
@@ -55,7 +55,7 @@ pub trait UniaxialMaterial: Send + Sync {
     /// not the continuum tangent.
     ///
     /// # Arguments
-    /// * `strain` — the same trial strain as passed to [`stress`]
+    /// * `strain` — the same trial strain as passed to [`Self::stress`]
     fn tangent(&self, strain: f64) -> f64;
 
     /// Commit the current strain as the new converged state.
@@ -70,7 +70,7 @@ pub trait UniaxialMaterial: Send + Sync {
     /// * `strain` — the converged trial strain
     /// 
     /// # Errors
-    /// - [`MaterialError::StrainDomainViolation`] if `strain` falls outside
+    /// - [`crate::error::MaterialError::StrainDomainViolation`] if `strain` falls outside
     ///   the valid domain of this constitutive model.
     ///
     /// For `ElasticUniaxial`, this never returns `Err` because linear

@@ -15,7 +15,7 @@
 //! ## Design note
 //!
 //! Functions here are generic over `T` where possible, allowing reuse in
-//! both the f64 Newton-Raphson path and the dual-number energy<T> path.
+//! both the f64 Newton-Raphson path and the dual-number `energy<T>` path.
 
 pub mod truss;
 pub mod beam;

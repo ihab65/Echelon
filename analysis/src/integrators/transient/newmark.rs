@@ -207,7 +207,7 @@ impl Integrator for Newmark {
     /// contributions via this integrator).
     ///
     /// # Errors
-    /// - [`AnalysisError::AssemblyError`] if external load assembly or matrix-vector multiplication fails.
+    /// - [`crate::error::AnalysisError::Assembly`] if external load assembly or matrix-vector multiplication fails.
     fn new_step(&mut self, system: &mut GlobalSystem, model: &mut Model) -> Result<()> {
         self.current_time += self.dt;
 
@@ -251,7 +251,7 @@ impl Integrator for Newmark {
     }
 
     /// # Errors
-    /// - [`AnalysisError::AssemblyError`] if adding mass or damping to stiffness fails.
+    /// - [`crate::error::AnalysisError::Assembly`] if adding mass or damping to stiffness fails.
     fn form_tangent(&self, system: &mut GlobalSystem) -> Result<()> {
         // K_eff = K_T + a0*M + a1*C  (Newmark coefficients)
         // a0 = 1/(β Δt²),  a1 = γ/(β Δt)

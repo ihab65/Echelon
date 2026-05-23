@@ -31,7 +31,7 @@
 //!
 //! ## Implementing this trait
 //!
-//! Implement [`AdjointSensitive`] on any [`UniaxialMaterial`] that you want
+//! Implement [`AdjointSensitive`] on any [`crate::UniaxialMaterial`] that you want
 //! to include in Engine B sensitivity analysis.  The trait has a single method:
 //! `stress_sensitivity`, which returns `∂σ/∂θ_i` at the **committed** strain.
 //!

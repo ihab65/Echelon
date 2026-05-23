@@ -1005,7 +1005,7 @@ fn test_node_recorder_pushover() {
     let integrator = LoadControl::new(0.1); // 10 × Δλ = 0.1
 
     let mut driver = StaticNonlinear::new(algorithm, integrator, &model).unwrap();
-    driver.add_recorder(Box::new(NodeRecorder::single(4, "tip_uy")));
+    driver.add_recorder(NodeRecorder::single(4, "tip_uy"));
     assert!(driver.analyze(&mut model, 10).unwrap());
 
     let rec = driver.recorder_as::<NodeRecorder>(0).unwrap();

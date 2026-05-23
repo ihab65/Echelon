@@ -10,4 +10,7 @@ Cargo.lock
 # Editor
 .idea/
 .vscode/
-*.swp
+*.swp/docs/
+
+docs/
+scratch/

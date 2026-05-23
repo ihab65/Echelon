@@ -4,7 +4,7 @@
 //! and provides:
 //! - The 6×6 rotation matrix `T` that maps global DOFs to local DOFs.
 //! - The full transformed stiffness `Kg = Tᵀ Ke_local T` via
-//!   [`CoordTransf2d::transform_stiffness`].
+//!   [`CoordTransf2d::transform_stiffness_6x6`].
 //!
 //! ## Convention
 //!
@@ -145,7 +145,7 @@ impl<T: SparseScalar> CoordTransf2d<T> {
     ///     [ 0  R ]
     /// ```
     ///
-    /// Use this with [`transform_stiffness`](CoordTransf2d::transform_stiffness)
+    /// Use this with [`transform_stiffness_6x6`](CoordTransf2d::transform_stiffness_6x6)
     /// to rotate `Ke_local` into global coordinates.
     pub fn t_matrix_6x6(&self) -> [[T; 6]; 6] {
         let c = self.cos;

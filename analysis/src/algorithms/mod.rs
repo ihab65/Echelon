@@ -54,7 +54,7 @@ use solvers::linear::LinearSolver;
 /// 2. On each iteration: zero the system, assemble `K_T` and `F_int`,
 ///    form `R = F_ext - F_int`, apply BCs, factorize, solve for `Δu`.
 /// 3. Accumulate `model.u_global += Δu` after each solve.
-/// 4. Check convergence via the configured [`crate::tests::ConvergenceTest`].
+/// 4. Check convergence via the configured [`crate::convergence::ConvergenceTest`].
 /// 5. On convergence: call [`assembly::state::commit_state`] and return `Ok(())`.
 /// 6. On failure: call [`assembly::state::revert_state`] and return an error.
 ///

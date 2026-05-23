@@ -87,9 +87,9 @@ pub trait ConvergenceTest: Send + Sync {
 /// # Example
 ///
 /// ```rust,ignore
-/// use analysis::tests::{AndTest, ConvergenceTest};
-/// use analysis::tests::unbalance::NormUnbalance;
-/// use analysis::tests::displacement::NormDispIncr;
+/// use crate::convergence::{AndTest, ConvergenceTest};
+/// use crate::convergence::unbalance::NormUnbalance;
+/// use crate::convergence::displacement::NormDispIncr;
 ///
 /// let test = AndTest::new(vec![
 ///     Box::new(NormUnbalance::new(1e-6)),

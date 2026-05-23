@@ -130,9 +130,9 @@ pub struct Model {
     /// `loadConst` / `setLoadConst` pattern without any global state.
     pub p_base: Option<Vec<f64>>,
 
-    /// Support reactions at constrained DOFs, populated by [`compute_reactions`].
+    /// Support reactions at constrained DOFs, populated by [`Model::compute_reactions`].
     ///
-    /// Empty until [`compute_reactions`] is called after a converged step.
+    /// Empty until [`Model::compute_reactions`] is called after a converged step.
     pub reactions: Vec<f64>,
 }
 
@@ -231,7 +231,7 @@ impl Model {
     ///
     /// Evaluates `load` at `pseudo_time` and **accumulates** the result into
     /// `self.p_base`. Subsequent calls accumulate further — call
-    /// [`clear_baked_loads`] first to start fresh.
+    /// [`Model::clear_baked_loads`] first to start fresh.
     ///
     /// Unlike the removed `lock_loads`, this method does **not** touch
     /// `self.loads` (the active load queue). The caller decides what gets
@@ -281,7 +281,7 @@ impl Model {
     /// Clear the active dynamic load queue without touching `p_base`.
     ///
     /// Equivalent to OpenSees's `loadConst` when called after
-    /// [`bake_load`]: first bake the gravity state, then clear the
+    /// [`Model::bake_load`]: first bake the gravity state, then clear the
     /// active queue before adding the next analysis phase's loads.
     #[inline]
     pub fn clear_active_loads(&mut self) {

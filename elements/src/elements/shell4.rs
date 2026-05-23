@@ -254,9 +254,9 @@ impl ElasticShell4 {
     /// * `coplanar_tol` — coplanarity tolerance (m); recommended: `1e-6 × element_size`
     ///
     /// # Errors
-    /// - [`ElementError::InadmissibleSection`] if `thickness ≤ 0`.
-    /// - [`ElementError::DegenerateGeometry`] if nodes are nearly coincident (zero-length edges).
-    /// - [`ElementError::DegenerateGeometry`] if node 3 deviates from the plane of nodes 0–1–2
+    /// - [`crate::error::ElementError::InadmissibleSection`] if `thickness ≤ 0`.
+    /// - [`fem_core::error::CoreError::DegenerateGeometry`] if nodes are nearly coincident (zero-length edges).
+    /// - [`fem_core::error::CoreError::DegenerateGeometry`] if node 3 deviates from the plane of nodes 0–1–2
     ///   by more than `coplanar_tol`.
     pub fn new(
         nodes:        [NodeId; 4],

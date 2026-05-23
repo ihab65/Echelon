@@ -42,7 +42,7 @@ use crate::model::Model;
 ///             `topology::build_pattern`; only values are overwritten)
 ///
 /// # Errors
-/// Propagates [`SparseError::IndexOutOfBounds`] if any element DOF map
+/// Propagates [`sparse::SparseError::IndexOutOfBounds`] if any element DOF map
 /// references a position absent from `k`'s pattern (topology mismatch).
 ///
 /// # Calling convention

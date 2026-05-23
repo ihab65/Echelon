@@ -14,26 +14,26 @@
 //! - `ω²` are the squared natural frequencies (eigenvalues)
 //! - `φ` are the mode shape vectors (eigenvectors)
 //!
-//! ## Not yet implemented
-//!
-//! No concrete `EigenSolver` is available yet. The trait is defined here so
-//! that the `analysis` crate can write `Eigen` driver code against it before
-//! a concrete implementation lands.
-//!
-//! Planned implementations (in priority order):
+//! ## Implementations
 //!
 //! | Type | Algorithm | Notes |
 //! |------|-----------|-------|
-//! | `LanczosEigenSolver` | Shift-invert Lanczos | Best for large sparse K, M; few modes needed |
+//! | [`LanczosEigenSolver`] | Shift-invert Lanczos | Best for large sparse K, M; few modes needed |
+//!
+//! Planned implementations:
+//!
+//! | Type | Algorithm | Notes |
+//! |------|-----------|-------|
 //! | `SubspaceEigenSolver` | Subspace iteration | Robust alternative for ill-conditioned systems |
 //!
-//! ## Usage (once implemented)
+//! ## Usage
 //!
 //! ```rust,ignore
-//! use solvers::eigen::EigenSolver;
+//! use solvers::eigen::{EigenSolver, LanczosEigenSolver};
 //!
 //! // Solve for the lowest 5 modes
-//! let result = solver.solve_modes(&k, &m, n_modes: 5)?;
+//! let mut solver = LanczosEigenSolver::new();
+//! let result = solver.solve_modes(&k, &m, 5)?;
 //! println!("ω₁ = {:.4} rad/s", result.frequencies[0].sqrt());
 //! for (i, shape) in result.mode_shapes.iter().enumerate() {
 //!     println!("Mode {}: {:?}", i + 1, shape);
@@ -134,7 +134,7 @@ pub trait EigenSolver {
     /// * `m` — global mass matrix (upper triangle, SPD)
     ///
     /// # Errors
-    /// - [`SolverError::NotPositiveDefinite`] if the shift-invert matrix is singular.
+    /// - [`crate::error::SolverError::NotPositiveDefinite`] if the shift-invert matrix is singular.
     fn prepare(&mut self, k: &SymCsrMatrix<f64>, m: &SymCsrMatrix<f64>) -> Result<()>;
 
     /// Compute the `n_modes` lowest eigenpairs.

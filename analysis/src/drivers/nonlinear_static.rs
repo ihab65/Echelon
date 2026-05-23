@@ -64,13 +64,13 @@ use crate::system::GlobalSystem;
 /// use analysis::drivers::AnalysisDriver;
 ///
 /// // 1. Build convergence test
-/// let test = Box::new(NormUnbalance::new(1e-6));
+/// let test = NormUnbalance::new(1e-6);
 ///
-/// // 2. Build Newton-Raphson algorithm
-/// let algorithm = Box::new(NewtonRaphson::new(test, 25));
+/// // 2. Build the equilibrium solution algorithm
+/// let algorithm = NewtonRaphson::new(test, 25);
 ///
-/// // 3. Build load-controlled integrator: Δλ = 0.1 per step
-/// let integrator = Box::new(LoadControl::new(0.1));
+/// // 3. Build the load integrator
+/// let integrator = LoadControl::new(0.1);
 ///
 /// // 4. Assemble the model first, then create the driver
 /// let mut driver = StaticNonlinear::new(algorithm, integrator, &model)?;
@@ -160,8 +160,8 @@ impl StaticNonlinear {
     }
 
     /// Register a recorder to be triggered after each converged step.
-    pub fn add_recorder(&mut self, recorder: Box<dyn crate::recorder::Recorder>) {
-        self.recorders.push(recorder);
+    pub fn add_recorder<R: crate::recorder::Recorder + 'static>(&mut self, recorder: R) {
+        self.recorders.push(Box::new(recorder));
     }
 
     /// Access a recorder by index (for retrieving results after analysis).
@@ -194,7 +194,7 @@ impl AnalysisDriver for StaticNonlinear {
     ///
     /// # Errors
     /// - [`AnalysisError::InvalidConfiguration`] if system buffers are inconsistently sized.
-    /// - [`AnalysisError::SolverError`] if matrix factorization fails.
+    /// - [`crate::error::AnalysisError::Solver`] if matrix factorization fails.
     fn analyze(&mut self, model: &mut Model, steps: usize) -> Result<bool> {
         self.system.check_dof_consistency(model)?;
 

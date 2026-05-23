@@ -132,7 +132,7 @@ impl SpConstraint {
 /// penalty / substitution approach.
 ///
 /// # Errors
-/// Propagates [`SparseError`] from `SymCsrMatrix::zero_row_col` if the
+/// Propagates [`sparse::SparseError`] from `SymCsrMatrix::zero_row_col` if the
 /// DOF index is out of range for the pattern (indicates a topology mismatch).
 pub fn apply_dirichlet_bcs(
     constraints: &[SpConstraint],

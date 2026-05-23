@@ -1,6 +1,6 @@
 //! Top-level analysis drivers — the outer loops that orchestrate everything.
 //!
-//! A [`AnalysisDriver`] owns the integrator, algorithm, and [`GlobalSystem`].
+//! A [`AnalysisDriver`] owns the integrator, algorithm, and [`crate::system::GlobalSystem`].
 //! It executes the outer `for step in 0..steps` loop and coordinates the
 //! integrator and algorithm for each step.
 //!

@@ -43,9 +43,9 @@ use crate::topology::dof::validate_dof_maps;
 /// ```
 ///
 /// ## Errors
-/// - [`AssemblyError::UnresolvedNode`] if any element references a DOF index
+/// - [`crate::error::AssemblyError::UnresolvedNode`] if any element references a DOF index
 ///   that exceeds the model's total DOF count (caught by `validate_dof_maps`).
-/// - [`SparseError`] from `SymCsrMatrix::from_dof_connectivity` if the
+/// - [`sparse::SparseError`] from `SymCsrMatrix::from_dof_connectivity` if the
 ///   pattern construction fails (e.g., empty model).
 pub fn build_pattern(model: &Model) -> Result<SymCsrMatrix<f64>> {
     // Validate before building — fail fast with a clear error rather than

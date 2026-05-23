@@ -52,9 +52,9 @@ pub trait LoadPattern: Send + Sync {
         alpha:       f64
     );
 
-        /// Clone this load pattern into a heap-allocated trait object.
+    /// Clone this load pattern into a heap-allocated trait object.
     ///
-    /// Required by [`LoadCombo`] and the `load_combo!` macro so that load
+    /// Required by [`crate::loads::combo::LoadCombo`] and the `load_combo!` macro so that load
     /// cases can be composed into combinations without consuming ownership.
     fn clone_box(&self) -> Box<dyn LoadPattern>;
 
@@ -178,7 +178,7 @@ unsafe impl Sync for NodalLoad {}
 ///
 /// The element is identified by the index returned from
 /// [`Model::add_element`]. The load is converted to equivalent global
-/// nodal forces via [`Element::equivalent_nodal_forces`] and scattered into
+/// nodal forces via [`elements::traits::Element::equivalent_nodal_forces`] and scattered into
 /// `f_ext` at the element's global DOFs.
 ///
 /// # Example — uniform gravity load on beam element 2

@@ -1,13 +1,13 @@
 //! Linear elastic isotropic ND material.
 //!
-//! `ElasticIsotropic` is the multi-dimensional analogue of [`ElasticUniaxial`]:
+//! `ElasticIsotropic` is the multi-dimensional analogue of [`crate::ElasticUniaxial`]:
 //! it models a linear, isotropic, elastic solid characterised by Young's
 //! modulus `E` and Poisson's ratio `ν`.
 //!
 //! The material is constructed with a specific [`NdOrder`], which selects
 //! the Voigt convention (plane-stress, plane-strain, or full 3-D) and
 //! pre-computes the corresponding elastic stiffness tensor at construction
-//! time.  All hot-path methods — [`stress`] and [`tangent`] — are then
+//! time.  All hot-path methods — [`crate::NdMaterial::stress`] and [`crate::NdMaterial::tangent`] — are then
 //! simple matrix-vector or block-copy operations with **zero allocations**.
 //!
 //! # Parameters
@@ -77,7 +77,7 @@ impl NdOrder {
 ///
 /// This is the simplest ND material and serves as the reference
 /// implementation for the [`NdMaterial`] trait, in the same way that
-/// [`ElasticUniaxial`] is the reference for [`UniaxialMaterial`].
+/// [`crate::ElasticUniaxial`] is the reference for [`crate::UniaxialMaterial`].
 ///
 /// The elastic stiffness tensor `C` is pre-computed at construction
 /// time and stored as a flat row-major array.  The maximum allocation

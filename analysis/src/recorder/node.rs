@@ -28,7 +28,7 @@ impl NodeRecorder {
     ///
     /// # Arguments
     /// * `dofs`  — global DOF indices to track (e.g. `vec![3, 4]` for node 1 UX and UY)
-    /// * `label` — identifier used in [`description`]
+    /// * `label` — identifier used in [`Recorder::description`]
     pub fn new(dofs: Vec<usize>, label: impl Into<String>) -> Self {
         Self {
             dofs,

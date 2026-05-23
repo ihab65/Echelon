@@ -15,17 +15,17 @@
 //! ### Uniaxial materials
 //!
 //! 1. Create `materials/<name>.rs`.
-//! 2. Implement [`UniaxialMaterial`] (always required).
+//! 2. Implement [`crate::UniaxialMaterial`] (always required).
 //! 3. If the material is smooth (no yield surface), also implement
-//!    [`SmoothUniaxial<T>`] for generic `T`.
+//!    [`crate::SmoothUniaxial`] for generic `T`.
 //! 4. If the material has history dependence and should participate in
-//!    Engine B sensitivity analysis, implement [`AdjointSensitive`].
+//!    Engine B sensitivity analysis, implement [`crate::AdjointSensitive`].
 //! 5. Add `pub mod <name>;` and a re-export below.
 //!
 //! ### ND materials
 //!
 //! 1. Create `materials/<name>.rs`.
-//! 2. Implement [`NdMaterial`] (always required).
+//! 2. Implement [`crate::NdMaterial`] (always required).
 //! 3. Select the appropriate [`NdOrder`] for the formulation.
 //! 4. Add `pub mod <name>;` and a re-export below.
 

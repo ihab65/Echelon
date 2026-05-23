@@ -161,7 +161,7 @@ impl Integrator for HHT {
     /// ```
     ///
     /// # Errors
-    /// - [`AnalysisError::AssemblyError`] if external load assembly or matrix-vector multiplication fails.
+    /// - [`crate::error::AnalysisError::Assembly`] if external load assembly or matrix-vector multiplication fails.
     fn new_step(&mut self, system: &mut GlobalSystem, model: &mut Model) -> Result<()> {
         self.current_time += self.dt;
         let n = model.n_dof();
@@ -219,7 +219,7 @@ impl Integrator for HHT {
     }
 
     /// # Errors
-    /// - [`AnalysisError::AssemblyError`] if adding mass or damping to stiffness fails.
+    /// - [`crate::error::AnalysisError::Assembly`] if adding mass or damping to stiffness fails.
     fn form_tangent(&self, system: &mut GlobalSystem) -> Result<()> {
         // HHT effective stiffness: K_eff = a0*M + (1+α)*a1*C + (1+α)*K_T
         // K_T was just assembled by assemble_stiffness; scale it by (1+α).

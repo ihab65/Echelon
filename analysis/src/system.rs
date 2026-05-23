@@ -212,7 +212,7 @@ impl GlobalSystem {
 
     /// Compute the Euclidean norm of the current residual vector `r`.
     ///
-    /// This is the primary convergence measure for [`crate::tests::unbalance::NormUnbalance`].
+    /// This is the primary convergence measure for [`crate::convergence::unbalance::NormUnbalance`].
     #[inline]
     pub fn residual_norm(&self) -> f64 {
         self.r.iter().map(|&x| x * x).sum::<f64>().sqrt()
@@ -221,7 +221,7 @@ impl GlobalSystem {
     /// Compute the Euclidean norm of the displacement increment `Δu`.
     ///
     /// This is the primary convergence measure for
-    /// [`crate::tests::displacement::NormDispIncr`].
+    /// [`crate::convergence::displacement::NormDispIncr`].
     #[inline]
     pub fn delta_u_norm(&self) -> f64 {
         self.delta_u.iter().map(|&x| x * x).sum::<f64>().sqrt()
@@ -229,7 +229,7 @@ impl GlobalSystem {
 
     /// Compute the incremental energy `0.5 * Δu · R`.
     ///
-    /// This is the convergence measure for [`crate::tests::energy::EnergyIncrement`].
+    /// This is the convergence measure for [`crate::convergence::energy::EnergyIncrement`].
     /// It represents the virtual work done by the residual forces through the
     /// displacement increment — an energetically consistent stopping criterion.
     #[inline]

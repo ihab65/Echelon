@@ -124,7 +124,7 @@ impl Integrator for DispControl {
     ///
     /// # Errors
     /// - [`AnalysisError::InvalidConfiguration`] if `control_dof` is out of bounds.
-    /// - [`AnalysisError::AssemblyError`] if load vector assembly fails.
+    /// - [`crate::error::AnalysisError::Assembly`] if load vector assembly fails.
     fn new_step(&mut self, system: &mut GlobalSystem, model: &mut Model) -> Result<()> {
         // Validate that the control DOF is within range
         let n_dof = model.n_dof();

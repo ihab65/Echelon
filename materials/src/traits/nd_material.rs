@@ -1,6 +1,6 @@
 //! [`NdMaterial`] — the multi-dimensional constitutive interface.
 //!
-//! This is the N-dimensional analogue of [`UniaxialMaterial`].  Where the
+//! This is the N-dimensional analogue of [`crate::UniaxialMaterial`].  Where the
 //! uniaxial trait maps a scalar strain to a scalar stress, `NdMaterial`
 //! maps a strain **vector** to a stress **vector** and provides the
 //! material tangent **matrix** (Voigt notation, row-major flat storage).
@@ -61,11 +61,11 @@ use crate::error::Result;
 ///
 /// The tangent matrix is stored **row-major** so that `C[i][j]` lives at
 /// index `i * order() + j` in the flat slice — consistent with the
-/// row-major convention used by `ke_flat` in the [`Element`] trait.
+/// row-major convention used by `ke_flat` in the `Element` trait.
 ///
 /// # Thread safety
 ///
-/// Like [`UniaxialMaterial`], implementations must be `Send + Sync` to
+/// Like [`crate::UniaxialMaterial`], implementations must be `Send + Sync` to
 /// support population-parallel analysis.
 pub trait NdMaterial: Send + Sync {
     /// Number of independent strain/stress components in the Voigt vector.
@@ -99,7 +99,7 @@ pub trait NdMaterial: Send + Sync {
     /// (consistent) tangent, not the continuum tangent.
     ///
     /// # Arguments
-    /// * `strain` — the same trial strain as passed to [`stress`]
+    /// * `strain` — the same trial strain as passed to [`Self::stress`]
     /// * `out`    — tangent output buffer (row-major), length `order()²`
     ///
     /// # Panics (debug)
@@ -119,7 +119,7 @@ pub trait NdMaterial: Send + Sync {
     /// * `strain` — the converged trial strain vector, length `order()`
     ///
     /// # Errors
-    /// - [`MaterialError::StrainDomainViolation`] if any component of
+    /// - [`crate::error::MaterialError::StrainDomainViolation`] if any component of
     ///   `strain` falls outside the valid domain of this constitutive
     ///   model.
     fn commit_state(&mut self, strain: &[f64]) -> Result<()>;

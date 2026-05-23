@@ -1,7 +1,7 @@
 //! Parameters describing a load applied to an element span.
 //!
 //! [`ElementLoadParams`] is a pure data enum — no methods, no state.
-//! It is passed to [`Element::equivalent_nodal_forces`] which converts it
+//! It is passed to [`crate::traits::Element::equivalent_nodal_forces`] which converts it
 //! into the equivalent nodal force vector in global coordinates.
 //!
 //! ## Sign convention
@@ -18,7 +18,7 @@
 
 /// Parameters for a load applied along the span of a structural element.
 ///
-/// Passed to [`Element::equivalent_nodal_forces`] to compute the
+/// Passed to [`crate::traits::Element::equivalent_nodal_forces`] to compute the
 /// statically equivalent nodal forces (fixed-end reactions, reversed).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ElementLoadParams {

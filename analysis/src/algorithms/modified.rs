@@ -74,7 +74,7 @@ use assembly::Model;
 /// use analysis::algorithms::modified::ModifiedNewton;
 /// use analysis::tests::unbalance::NormUnbalance;
 ///
-/// let test = Box::new(NormUnbalance::new(1e-4));   // looser tol for more iters
+/// let test = NormUnbalance::new(1e-4);   // looser tol for more iters
 /// let algo = ModifiedNewton::new(test, 50);         // allow more iterations
 /// ```
 pub struct ModifiedNewton {
