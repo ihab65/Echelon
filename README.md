@@ -4,7 +4,7 @@
 
 **A structural finite element engine built in Rust — parallel by design, Python-accessible, and AI-native.**
 
-*Currently in active development. The sparse matrix layer and solver ordering are complete. Cholesky factorization, elements, materials, and the Python API are in progress.*
+*Currently in active development. The Rust core — sparse storage, direct solvers, modal analysis, and linear-elastic FEM assembly/analysis — is complete and tested. Nonlinear materials, the Python API, and the population runner are next.*
 
 </div>
 
@@ -17,6 +17,8 @@ Echelon is a structural analysis engine that addresses a gap in the existing lan
 OpenSees is powerful but carries 1990s architecture — single-threaded, global mutable state, not designed for programmatic access at scale. Commercial tools are black boxes with no ML integration. Pure-Python FEM tools are too slow for anything beyond toy problems.
 
 Echelon is built from the ground up for the workflow that modern structural engineering research actually needs:
+
+> **⚠️ Target workflow — not yet runnable.** The Python package and population runner below are the goal of Phase 4. Today Echelon is a Rust library; you build models and run analyses in Rust directly (see [What You Can Do With It Today](#what-you-can-do-with-it-today)).
 
 ```python
 import echelon as ec
@@ -51,16 +53,16 @@ Echelon is a Cargo workspace of focused crates with a strict one-way dependency 
 
 ```
                      ┌─────────────────┐
-                     │  echelon (PyO3) │  ← Python API (OpenSeesPy replacement)
+                     │  echelon (PyO3) │  ← Python API (planned)
                      └────────┬────────┘
                               │
               ┌───────────────┼───────────────┐
               ▼               ▼               ▼
-        ┌──────────┐   ┌──────────┐   ┌──────────┐
-        │ assembly │   │  solver  │   │   bevy   │  (optional visualization)
-        └─────┬────┘   └────┬─────┘   └──────────┘
-              │              │
-    ┌─────────┴──────────────┘
+        ┌──────────┐   ┌──────────┐   ┌────────────────┐
+        │ assembly │   │ analysis │   │ bevy (planned) │
+        └─────┬────┘   └────┬─────┘   │   , optional   │
+              │             │         └────────────────┘
+    ┌─────────┴─────────────┘
     │         │
     ▼         ▼
 ┌──────────┐ ┌──────────┐
@@ -70,22 +72,23 @@ Echelon is a Cargo workspace of focused crates with a strict one-way dependency 
      └──────┬──────┘
             ▼
        ┌──────────┐
-       │   core   │  (index types, small dense matrices, transforms)
+       │   core   │  (index types, dense math, 2D/3D transforms)
        └────┬─────┘
             │
             ▼
        ┌──────────┐
-       │ solvers  │  ← Cholesky, RCM ordering (this crate)
+       │ solvers  │  ← Cholesky, LDLT, RCM ordering, Lanczos eigen
        └────┬─────┘
             │
             ▼
        ┌──────────┐
-       │  sparse  │  ← CSR, SymCSR, CSC, CooBuilder (foundation)
+       │  sparse  │  ← CSR, SymCSR, CSC, COO (foundation)
        └──────────┘
 ```
 
-The entire analysis stack — from sparse storage through the Python API — is pure Rust with no
-external linear algebra dependencies. No LAPACK, no BLAS, no unsafe FFI.
+A companion crate, `fem-tests`, holds structural-level integration tests (frames, trusses, beams) verified against analytical solutions.
+
+The entire analysis stack — from sparse storage through the solver — is pure Rust with no external linear algebra dependencies. No LAPACK, no BLAS, no unsafe FFI.
 
 ---
 
@@ -105,9 +108,10 @@ Everything needed for FEM assembly is implemented:
 - Full conversion pipeline: CSR → SymCSR → CSC
 - `CooBuilder` for triplet-based construction with duplicate summation
 - Optional `rayon` parallel feature
+- Matrix-market I/O and benchmarks
 - Comprehensive test suite with integration tests
 
-### ✅ `solvers` — Ordering, Cholesky, and LDLT Complete
+### ✅ `solvers` — Direct Solvers, Ordering, and Modal Analysis
 
 RCM (Reverse Cuthill-McKee) fill-reduction ordering is fully implemented:
 - `Graph` — adjacency structure from `SymCsrMatrix`, O(nnz) two-pass construction
@@ -115,46 +119,97 @@ RCM (Reverse Cuthill-McKee) fill-reduction ordering is fully implemented:
 - `rcm()` — full algorithm with pseudo-peripheral node detection and degree-ordered BFS
 
 `SparseSolver` interface (three-phase: `analyze` → `factorize` → `solve`) is implemented.
-Included are both symmetric positive-definite (Cholesky) and symmetric indefinite (LDLᵀ) direct solvers.
+Included are:
+- Symmetric positive-definite **Cholesky** (symbolic via elimination trees, numeric left-looking with dense column workspace)
+- Symmetric indefinite **LDLᵀ**
+- **Lanczos eigensolver** for modal analysis — eigenvalues, mode shapes (M-orthonormal), frequencies and periods
 
 ### ✅ `fem-core` — Complete
 
 Foundation types for the finite element domain:
 - Node and element ID newtypes.
-- Small dense vector/matrix math.
-- 2D `CoordTransf2d` and `DofMap` implementations.
+- Small dense vector/matrix math (2D and 3D).
+- `CoordTransf2d` and `CoordTransf3d`, `DofMap` implementations.
 
-### ✅ `materials` — Complete
+### ✅ `materials` — Complete (elastic only)
 
-Architecture supporting smooth autodiff-friendly materials and history-dependent materials.
-Includes reference implementations like `ElasticUniaxial`.
+Architecture supporting smooth autodiff-friendly materials and history-dependent materials
+(commit/revert state model). Reference implementations:
+- `ElasticUniaxial`
+- `ElasticIsotropic` (ND material)
 
-### ✅ `elements` — Complete
+**Note:** no inelastic material models exist yet (`Steel01`, `Concrete01` are planned). Nonlinear
+analysis currently means nonlinear solution algorithms with linear-elastic constitutive response.
+
+### ✅ `elements` — Complete (linear elastic)
 
 Implementation of finite elements:
 - `Truss2d` (linear, energy-based implementation)
 - `ElasticBeam2d` (frame element, linear elastic)
+- `ElasticShell4` (4-node MITC4 flat shell, 24 DOF, ND material, isoparametric formulation with Gauss integration)
 
 ### ✅ `assembly` — Complete
 
 The core system for holding models and assembling sparse matrices.
-- `Model` structure for managing nodes, elements, and DOFs.
+- `Model` structure for managing nodes, elements, constraints, and DOFs.
 - Connectivity and topology graph generation to determine matrix non-zero patterns.
-- Stiffness, mass, and damping matrix assembly.
-- Global load combination and external force application.
+- Stiffness, mass, and Rayleigh damping matrix assembly; internal force and self-weight vectors.
+- Dirichlet constraints (`SpConstraint`) and reaction recovery.
+- Loads: nodal, element, gravity, seismic (ground motion / `UniformExcitation`), time series
+  (`ConstantSeries`, `LinearSeries`, `PathSeries`), and load combinations.
+- Adjoint sensitivity scaffolding (`assemble_partial_residual`) — experimental, see [TODO](#experimental--at-risk).
 
-### ✅ `analysis` (solver) — Complete
+### ✅ `analysis` — Complete
+
 Core algorithmic routines for solving structural equilibrium:
-- Linear equation solving.
-- Nonlinear `Newton-Raphson` and `ModifiedNewton` solution algorithms.
-- Integrators for `StaticNonlinear` (e.g. `LoadControl`, `DispControl`).
-- Integrators for `Transient` dynamics (e.g. `Newmark`, `HHT`).
+- `LinearStatic` driver.
+- Nonlinear `NewtonRaphson` and `ModifiedNewton` solution algorithms.
+- Convergence criteria: displacement, unbalance (force), energy increment.
+- Integrators for `StaticNonlinear` (`LoadControl`, `DispControl`).
+- Integrators for `Transient` dynamics (`Newmark`, `HHT-α`) with a nonlinear time-history driver.
+- `NodeRecorder` and `ElementRecorder` for structured response output.
 
-### 🔄 In Progress / Planned
+### ✅ `fem-tests` — Structural Verification
+
+Integration tests at the structure level, verified against analytical closed-form solutions:
+single spring, 1D bar, V-truss, cantilever, fixed-fixed beam, simply supported beam, portal
+frame under lateral load, indeterminate Pratt truss, and reanalysis with shared topology.
+
+### Verification status
+
+- ✅ Verified against **analytical closed forms** (beams, trusses, frames, eigen pairs) with tight
+  relative tolerances (1e-9).
+- ❌ **No OpenSees cross-validation yet.** The earlier README claim of "verified against OpenSees"
+  was incorrect — verification is analytical, which is a stronger test where it applies.
+- ⚠️ Dynamics and modal analysis are verified at the **algorithm level** (tangent formation, eigen
+  residuals vs. hand-computed systems) but not yet **end-to-end** on real structures.
+
+### 🔄 Planned
 
 | Crate | Status |
 |---|---|
 | `echelon` (Python) | Not started — PyO3 bindings, population runner |
+| `bevy` (visualization) | Not started — optional |
+
+---
+
+## What You Can Do With It Today
+
+Everything below is implemented and tested, but is a **Rust API** — there is no Python interface yet.
+
+- **Build structural models in code**: 2D/3D truss, frame, and MITC4 shell models with nodal
+  coordinates, elements, elastic materials, and boundary conditions.
+- **Assemble** stiffness, lumped mass, and Rayleigh damping matrices; apply nodal/element/gravity
+  loads, ground-motion excitation, and load combinations.
+- **Run static analysis**: linear static, and nonlinear-elastic static with Newton-Raphson or
+  Modified-Newton, load or displacement control, and your choice of convergence criterion.
+- **Run modal analysis**: extract natural frequencies, periods, and mode shapes via Lanczos.
+- **Time-history scaffolding**: Newmark and HHT-α integrators with a transient driver are coded
+  and unit-tested, ready for seismic analysis once end-to-end verification lands.
+- **Recover results**: reaction forces, nodal displacement/velocity/acceleration histories via
+  recorders, element axial/shear/moment at nodes.
+- **Parallelism**: `sparse` ships a `rayon` feature; the design (stateless models, no global
+  state) is built to parallelize, but the population-scale runner does not exist yet.
 
 ---
 
@@ -217,8 +272,8 @@ with 1,000 design candidates evaluated per generation in seconds, not hours.
 Population parallelism is a direct consequence.
 
 **Zero-cost where it matters.** The sparse layer uses binary search, pre-allocated workspaces,
-and no per-call heap allocation in hot paths. `matvec_into` makes no allocations.
-Cholesky will use the standard dense-column-workspace approach.
+and no per-call heap allocation in hot paths. `matvec_into` makes no allocations. Cholesky,
+permutations, and the transient integrators use pre-allocated workspaces.
 
 **Errors, not panics.** Every fallible operation returns `Result`. The error types carry
 context fields (row, column, dimension) so the debugging message is actionable.
@@ -237,7 +292,7 @@ about element types. Elements know nothing about the global system. Each layer h
 ### Prerequisites
 
 - Rust (stable, 2024 edition) — [rustup.rs](https://rustup.rs)
-- For the Python layer: Python 3.10+, `maturin`
+- For the (future) Python layer: Python 3.10+, `maturin`
 
 ### Build and Test
 
@@ -279,8 +334,16 @@ Echelon/
       lib.rs
       error.rs
       ordering/       ← graph.rs, permutation.rs, rcm.rs
+      linear/         ← cholesky.rs, ldlt.rs
+      eigen/          ← lanczos.rs
       cholesky/       ← mod.rs, symbolic.rs, numeric.rs, solve.rs
-    test/
+    tests/
+  fem-core/           ← ids, dense math, transforms, dof maps
+  materials/          ← elastic materials + smooth/history traits
+  elements/           ← truss2d, beam2d, shell4, local routines
+  assembly/           ← model, builders, loads, constraints, topology
+  analysis/           ← drivers, algorithms, integrators, recorders
+  fem-tests/          ← structural-level integration tests
 ```
 
 ---
@@ -291,18 +354,20 @@ Echelon/
 |---|---|---|---|---|
 | Structurally correct | ✅ | ✅ | ✅ | ✅ |
 | Parallel by design | ✅ | ❌ | Partial | ❌ |
-| AI/ML native | ✅ | ❌ | ❌ | ❌ |
-| Python API | ✅ (planned) | ✅ | ✅ | Limited |
-| Population scale | ✅ | ❌ | ❌ | ❌ |
-| Open source | ✅ | ✅ | ✅ | ❌ |
 | Pure Rust core | ✅ | ❌ | ❌ | ❌ |
-| Structural element library | ✅ (planned) | ✅ | Partial | ✅ |
+| Open source | ✅ | ✅ | ✅ | ❌ |
+| Python API | 🚧 (planned) | ✅ | ✅ | Limited |
+| AI/ML native | 🚧 (planned) | ❌ | ❌ | ❌ |
+| Population scale | 🚧 (planned) | ❌ | ❌ | ❌ |
+| Structural element library | ⚠️ (3 elastic elements) | ✅ | Partial | ✅ |
+
+Legend: ✅ implemented today · 🚧 planned · ⚠️ partial
 
 ---
 
 ## Roadmap
 
-### Phase 1 — Working Linear Static Solver (Current Focus)
+### Phase 1 — Linear Static Core ✅ Complete
 - [x] Sparse storage layer (`CsrMatrix`, `SymCsrMatrix`, `CscMatrix`)
 - [x] COO builder with duplicate summation
 - [x] Format conversions
@@ -310,36 +375,72 @@ Echelon/
 - [x] Symbolic Cholesky (elimination tree + L pattern)
 - [x] Numeric Cholesky (left-looking, dense column workspace)
 - [x] Triangular solve (with permutation)
-- [x] `fem-core` crate (index newtypes, transforms)
-- [x] `materials`: `ElasticUniaxial`
-- [x] `elements`: `Truss2d`, `ElasticBeam2d`
-- [x] `assembly`: DOF numbering, stiffness assembly, BC application
-- [x] Portal frame integration test (compare with analytical solution)
+- [x] LDLᵀ solver (symmetric indefinite)
+- [x] Lanczos eigensolver (modal analysis)
+- [x] `fem-core` crate (index newtypes, 2D/3D transforms)
+- [x] `materials`: `ElasticUniaxial`, `ElasticIsotropic`
+- [x] `elements`: `Truss2d`, `ElasticBeam2d`, `ElasticShell4`
+- [x] `assembly`: DOF numbering, stiffness/mass/damping assembly, BC application
+- [x] `analysis`: `LinearStatic`, `StaticNonlinear` (Newton/Modified-Newton), load/displacement control
+- [x] Loads: nodal, element, gravity, seismic, `PathSeries`, load combinations
+- [x] Reaction recovery and recorders
+- [x] Structural integration tests (beams, trusses, frames) vs. analytical solutions
 
-### Phase 2 — Nonlinear Static Analysis
-- [x] Newton-Raphson loop in `analysis`
-- [ ] `Steel01`, `Concrete01` material models
+### Phase 2 — Nonlinear Static Analysis 🔄 In Progress
+- [x] Newton-Raphson and Modified-Newton loops in `analysis`
 - [x] Load patterns with combinations
-- [x] RC frame pushover analysis (verified against OpenSees via `analysis_integration` tests)
+- [x] Incremental load-control analysis (pushover driver) — currently linear-elastic only, verified vs. analytical
+- [ ] `Steel01`, `Concrete01` inelastic material models
+- [ ] Fiber-section engine + nonlinear beam-column element (distributed plasticity)
 
-### Phase 3 — Dynamic Analysis
-- [x] Consistent and lumped mass matrices
+### Phase 3 — Dynamic Analysis 🔄 In Progress
+- [x] Lumped mass matrices
 - [x] Newmark integration
-- [x] HHT integration
-- [x] Nonlinear time history analysis drivers
-- [ ] Ground motion input (`PathSeries`)
+- [x] HHT-α integration
+- [x] Nonlinear time-history analysis driver
+- [x] Ground motion input (`PathSeries`, `GroundMotion`, `UniformExcitation`)
+- [ ] Consistent mass matrices
+- [ ] End-to-end dynamic response verification (e.g. free-vibration period, NLTHA vs. known solution)
 
-### Phase 4 — Python API and Population Runner
+### Phase 4 — Python API and Population Runner ⏳ Not Started
 - [ ] PyO3 bindings (`echelon` Python package)
 - [ ] Population runner with Rayon parallelism
 - [ ] DataFrame and numpy result extraction
 - [ ] Parquet export
 
-### Phase 5 — Research Platform
+### Phase 5 — Research Platform ⏳ Not Started
 - [ ] Structural archetypes (RC frame, steel frame, bridge)
 - [ ] Surrogate model interface
 - [ ] Verification manual (against analytical solutions and OpenSees)
 - [ ] Reference datasets published
+
+---
+
+## TODO / Next Steps
+
+### High priority
+- [ ] `Steel01`, `Concrete01` inelastic material models
+- [ ] Fiber-section engine + nonlinear beam-column element (distributed plasticity)
+- [ ] Consistent mass matrices
+- [ ] End-to-end dynamic (NLTHA) verification against a known solution
+- [ ] End-to-end modal analysis on a real frame structure
+- [ ] Shell element structural-level verification test
+- [ ] OpenSees cross-validation suite
+
+### Medium priority
+- [ ] PyO3 bindings (`echelon` Python package)
+- [ ] Population runner with Rayon parallelism
+- [ ] DataFrame / numpy result extraction and Parquet export
+- [ ] Structural archetypes (RC frame, steel frame, bridge)
+- [ ] Verification manual
+- [ ] Reference datasets published
+- [ ] Optional `bevy` visualization
+
+### Experimental / at-risk
+- [ ] **Gradient-based sensitivity (adjoint method)** — the `assemble_partial_residual` /
+  `partial_residual_wrt_param` scaffolding is currently a **purely theoretical prototype**.
+  Exact gradients through history-dependent materials require a return-mapping-aware adjoint,
+  and this path **may be discarded in the future due to complexity**.
 
 ---
 
